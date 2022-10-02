@@ -1,3 +1,6 @@
 #!/bin/bash
 
-echo "dupa"
+mkdir ../build
+cd ../build
+cmake ../RoboticArm
+cmake .
