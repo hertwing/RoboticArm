@@ -1,2 +1,4 @@
-add_subdirectory(Library)
-add_subdirectory(Process)
+project(robotic_arm)
+
+add_subdirectory(library)
+add_subdirectory(process)
