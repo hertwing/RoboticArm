@@ -2,13 +2,15 @@
 
 PROJECT_PATH=$(pwd)
 RPI_TOOLCHAIN_CMAKE=''
+ARM_BUILD_FLAG=''
 BUILD_PATH=~/robotic_arm_build/x86
 
 while [[ $# -gt 0 ]]; do
     case $1 in
     --arm)
-        RPI_TOOLCHAIN_CMAKE="-D CMAKE_TOOLCHAIN_FILE=${PROJECT_PATH}/rpi_toolchain.cmake"
+        RPI_TOOLCHAIN_CMAKE="-DCMAKE_TOOLCHAIN_FILE=${PROJECT_PATH}/rpi_toolchain.cmake"
         BUILD_PATH=~/robotic_arm_build/arm
+        ARM_BUILD_FLAG="-DBUILD_ARM=ON"
         shift # past argument
         ;;
     -h|--help)
@@ -28,4 +30,4 @@ done
 
 mkdir -p $BUILD_PATH
 cd $BUILD_PATH
-cmake $RPI_TOOLCHAIN_CMAKE $PROJECT_PATH 
+cmake $ARM_BUILD_FLAG $RPI_TOOLCHAIN_CMAKE $PROJECT_PATH 

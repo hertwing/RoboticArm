@@ -13,7 +13,6 @@ add_library(library_${PROJECT_NAME}
     ${HEADERS}
     )
 
-# ?
 target_include_directories(library_${PROJECT_NAME}
     PUBLIC public
     )

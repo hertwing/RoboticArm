@@ -1,3 +1,6 @@
+#ifndef CAMERAROTOR_H
+#define CAMERAROTOR_H
+
 class CameraRotor
 {
 public:
@@ -5,3 +8,5 @@ public:
     ~CameraRotor() = default;
     void TestFun();
 };
+
+#endif // CAMERAROTOR_H
