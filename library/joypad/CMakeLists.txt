@@ -1,13 +1,14 @@
 project(joypad_handler)
 
 set(HEADERS
-    public/JoypadHandler.h
     public/JoypadData.h
+    public/JoypadHandler.h
     )
 
 set(SOURCES
-    private/JoypadHandler.cpp
     private/JoypadData.cpp
+    private/JoypadHandler.cpp
+    private/JoypadShmemHandler.cpp
     )
 
 add_library(library_${PROJECT_NAME}
@@ -20,5 +21,7 @@ target_include_directories(library_${PROJECT_NAME}
     )
 
 target_link_libraries(library_${PROJECT_NAME}
-    PUBLIC c++fs
+    PUBLIC stdc++fs
+    PUBLIC rt
+    PUBLIC pthread
     )

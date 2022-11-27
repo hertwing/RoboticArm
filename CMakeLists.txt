@@ -8,3 +8,5 @@ set(PROJECT_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 add_subdirectory(library)
 add_subdirectory(process)
+
+SET(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -lstdc++fs")

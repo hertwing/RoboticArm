@@ -1,5 +1,7 @@
 #include "JoypadData.h"
 
+#include <iostream>
+
 const JoypadData JoypadDataTypes::createJoypadData()
 {
     JoypadData joypad_data;
@@ -43,4 +45,16 @@ void JoypadDataTypes::parseJoypadData(const JoypadData & joypad_data)
     leftStickY = joypad_data.data[4];
     rightStickX = joypad_data.data[5];
     leftStickY = joypad_data.data[6];
+}
+
+void JoypadDataTypes::printJoypadData()
+{
+    std::cout << +leftTrigger << std::endl;
+    std::cout << +rightTrigger << std::endl;
+    std::cout << +leftBumper << std::endl;
+    std::cout << +rightBumper << std::endl;
+    std::cout << +leftStickX << std::endl;
+    std::cout << +leftStickY << std::endl;
+    std::cout << +rightStickX << std::endl;
+    std::cout << +rightStickY << std::endl;
 }

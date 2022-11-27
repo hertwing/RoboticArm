@@ -1,17 +1,19 @@
 #include "JoypadHandler.h"
+#include "JoypadShmemHandler.h"
 
 #include <bitset>
 #include <chrono>
 #include <fcntl.h>
-#include <filesystem>
+#include <experimental/filesystem>
 #include <iostream>
 #include <string>
+#include <string.h>
 #include <thread>
 #include <unistd.h>
 
-namespace fs = std::filesystem;
+namespace fs = std::experimental::filesystem;
 
-const char * JoypadHandler::HIDRAW_PATH = "/dev/hidraw";
+bool JoypadHandler::m_run_process = true;
 
 JoypadHandler::JoypadHandler()
 {
@@ -31,10 +33,11 @@ bool JoypadHandler::isJoypadConnected()
 
 bool JoypadHandler::checkJoypadConnection(const char * buffer, std::size_t buff_size)
 {
+    std::cout << "Checking connection" << std::endl;
     if (buff_size == GENESYS_BYTES_NUM)
     {
-        if (buffer[20] == buffer[22] == buffer[24] == buffer[26] == 2 &&
-            buffer[23] == buffer[25] == 0 &&
+        if (buffer[20] == 2 && buffer[22] == 2 && buffer[24] == 2 && buffer[26] == 2 &&
+            buffer[23] == 0 && buffer[25] == 0 &&
             buffer[19] == buffer[21])
         {
             return true;
@@ -45,41 +48,39 @@ bool JoypadHandler::checkJoypadConnection(const char * buffer, std::size_t buff_
 
 bool JoypadHandler::createConnection()
 {
-    while (!m_joypad_connected)
+    for (const auto & fd : fs::directory_iterator("/dev/"))
     {
-        for (const auto & fd : fs::directory_iterator("/dev/"))
+        if (fd.path().string().find(HIDRAW_PATH) == std::string::npos)
         {
-            if (fd.path().string().find(HIDRAW_PATH) == std::string::npos)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            break;
+        }
+        if ((m_joypad_fd = open(fd.path().c_str(), O_RDONLY | O_NONBLOCK)) > -1)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            if ((m_received_bytes = read(m_joypad_fd, m_buffer, BUFF_SIZE)) > 0)
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                continue;
-            }
-            if ((m_joypad_fd = open(fd.path().c_str(), O_RDONLY | O_NONBLOCK)) > -1)
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                if ((m_received_bytes = read(m_joypad_fd, m_buffer, BUFF_SIZE)) > 0)
+                std::cout << "Reading from hidraw descriptor." << std::endl;
+                if (checkJoypadConnection(m_buffer, m_received_bytes))
                 {
-                    if (checkJoypadConnection(m_buffer, m_received_bytes))
-                    {
-                        std::cout << "Joypad connected." << std::endl;
-                        m_joypad_connected = true;
-                        break;
-                    }
-                    else
-                    {
-                        std::cout << "Joypad not found." << std::endl;
-                        m_joypad_connected = false;
-                        close(m_joypad_fd);
-                        break;
-                    }
+                    std::cout << "Joypad connected." << std::endl;
+                    m_joypad_connected = true;
+                    break;
+                }
+                else
+                {
+                    std::cerr << "Joypad not found." << std::endl;
+                    m_joypad_connected = false;
+                    close(m_joypad_fd);
+                    break;
                 }
             }
-            else
-            {
-                std::cout << "Coulnd't open file descriptor." << std::endl;
-                m_joypad_connected = false;
-                close(m_joypad_fd);
-            }
+        }
+        else
+        {
+            std::cerr << "Coulnd't open file descriptor." << std::endl;
+            m_joypad_connected = false;
+            close(m_joypad_fd);
         }
     }
     return m_joypad_connected;
@@ -89,18 +90,32 @@ void JoypadHandler::connectAndRun()
 {
     createConnection();
     m_connection_timeout_counter = 0;
-    while (m_joypad_connected)
+    while (m_joypad_connected && m_run_process)
     {
         while ((m_received_bytes = read(m_joypad_fd, m_buffer, BUFF_SIZE)) > 0)
         {
             m_connection_timeout_counter = 0;
-            parseData(m_buffer);
+            // Update joypad data only when control bytes changes their values.
+            for (int i = 0; i < CONTROL_BYTES; ++i)
+            {
+                if (m_previous_buffer[i] != m_buffer[i])
+                {
+                    parseData(m_buffer);
+                    m_joypad_shmem_handler.writeJoypadData(m_joypad_data.createJoypadData());
+                    for (int i = 0; i < BUFF_SIZE; ++i)
+                    {
+                        m_previous_buffer[i] = m_buffer[i];
+                    }
+                    break;
+                }
+            }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         ++m_connection_timeout_counter;
         if (m_connection_timeout_counter == 2000)
         {
-            std::cout << "Connection with Joypad lost!" << std::endl;
+            std::cerr << "Connection with Joypad lost!" << std::endl;
+            m_joypad_connected = false;
             m_connection_timeout_counter = 0;
             close(m_joypad_fd);
             m_joypad_fd = -1;
@@ -151,28 +166,18 @@ void JoypadHandler::parseDPad(const char * data)
 
 void JoypadHandler::parseLeftStickAxis(const char * data)
 {
-    m_joypad_data.leftStickX = static_cast<unsigned>(data[3]) - 127;
-    m_joypad_data.leftStickY = -(static_cast<unsigned>(data[4]) - 128);
-    if (m_joypad_data.leftStickX == -128)
-    {
-        m_joypad_data.leftStickX == 127;
-    }
-    if (m_joypad_data.leftStickY == -128)
-    {
-        m_joypad_data.leftStickY == 127;
-    }
+    m_joypad_data.leftStickX = data[3];
+    m_joypad_data.leftStickY = data[4];
 }
 
 void JoypadHandler::parseRightStickAxis(const char * data)
 {
-    m_joypad_data.rightStickX = static_cast<unsigned>(data[5]) - 127;
-    m_joypad_data.rightStickY = -(static_cast<unsigned>(data[6]) - 128);
-    if (m_joypad_data.rightStickX == -128)
-    {
-        m_joypad_data.rightStickX == 127;
-    }
-    if (m_joypad_data.rightStickY == -128)
-    {
-        m_joypad_data.rightStickY == 127;
-    }
+    m_joypad_data.rightStickX = data[5];
+    m_joypad_data.rightStickY = data[6];
+}
+
+void JoypadHandler::signalCallbackHandler(int signum)
+{
+    std::cout << "JoypadHandler received signal: " << signum << std::endl;
+    m_run_process = false;
 }

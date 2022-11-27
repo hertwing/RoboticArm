@@ -82,7 +82,6 @@ void JoypadShmemHandler::writeJoypadData(JoypadData data)
 {
     if (m_shmem_created)
     {
-        std::cout << "Semaphore wait" << std::endl;
         if (sem_wait(writer_sem) == -1)
         {
             std::cerr << "Couldn't wait writer semaphore." << std::endl;
@@ -91,7 +90,6 @@ void JoypadShmemHandler::writeJoypadData(JoypadData data)
         {
             std::cerr << "Couldn't post reader semaphore." << std::endl;
         }
-        std::cout << "Writing to shmem" << std::endl;
         for (int i = 0; i < JoypadHandler::CONTROL_DATA_BINS; ++i)
         {
             m_data[i] = data.data[i];
@@ -104,6 +102,5 @@ void JoypadShmemHandler::writeJoypadData(JoypadData data)
         {
             std::cerr << "Couldn't post writer semaphore." << std::endl;
         }
-        std::cout << "Semaphore post" << std::endl;
     }
 }

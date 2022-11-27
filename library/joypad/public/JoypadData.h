@@ -35,13 +35,14 @@ struct JoypadDataTypes
     std::uint8_t buttonLeftStick  : 1;
     std::uint8_t buttonRightStick : 1;
 
-    std::uint8_t leftStickX  : 1;
-    std::uint8_t leftStickY  : 1;
-    std::uint8_t rightStickX : 1;
-    std::uint8_t rightStickY : 1;
+    std::uint8_t leftStickX;
+    std::uint8_t leftStickY;
+    std::uint8_t rightStickX;
+    std::uint8_t rightStickY;
 
     const JoypadData createJoypadData();
     void parseJoypadData(const JoypadData & data);
+    void printJoypadData();
 };
 
 #endif // JOYPADDATA_H
