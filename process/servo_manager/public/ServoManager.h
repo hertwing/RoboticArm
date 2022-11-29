@@ -47,6 +47,7 @@ private:
 private:
     bool readJoypadManagerPid();
     bool openJoypadShmem();
+    void praseJoypadData();
 };
 
 #endif // SERVOMANAGER_H

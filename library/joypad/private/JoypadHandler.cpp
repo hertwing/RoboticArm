@@ -48,6 +48,7 @@ bool JoypadHandler::checkJoypadConnection(const char * buffer, std::size_t buff_
 
 bool JoypadHandler::createConnection()
 {
+    std::cout << "Trying to obtain joypad hidraw fd." << std::endl;
     for (const auto & fd : fs::directory_iterator("/dev/"))
     {
         if (fd.path().string().find(HIDRAW_PATH) == std::string::npos)

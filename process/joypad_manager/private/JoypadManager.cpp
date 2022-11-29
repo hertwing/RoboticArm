@@ -16,7 +16,6 @@ void JoypadManager::joypadReader()
 {
     while (m_run_process)
     {
-        std::cout << "Running" << std::endl;
         m_joypad_handler.connectAndRun();
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }

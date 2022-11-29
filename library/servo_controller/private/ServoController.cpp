@@ -33,6 +33,7 @@ int ServoController::calcTicks(float impulseMs, int hertz)
 
 void ServoController::setStartupPosition()
 {
+    std::cout << "Setting ARM startup position..." << std::endl;
     for (int i = 0; i < SERVO_NUM; ++i)
     {
         float millis = static_cast<float>(STARTUP_POSITIONS[i]) / 1000;
@@ -40,6 +41,7 @@ void ServoController::setStartupPosition()
         int tick = calcTicks(millis, HERTZ);
         pwmWrite(PIN_BASE + i, tick);
         m_current_position[i] = STARTUP_POSITIONS[i];
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
 }
 
@@ -50,62 +52,69 @@ void ServoController::setAbsolutePosition(int position, int servo_num)
     {
         if (current_position < position)
         {
-            current_position += 3;
+            current_position += 1;
             if (current_position > position)
             {
-                // std::cout << "debug" << std::endl;
-                current_position = position;
-            }
-        } else {
-            current_position -= 3;
-            if (current_position < position)
-            {
-                // std::cout << "debug" << std::endl;
                 current_position = position;
             }
         }
-        if (servo_num >= 0 && servo_num < SERVO_NUM && current_position >= MIN_POS_VAL && current_position <= MAX_POS_VAL)
+        else
+        {
+            current_position -= 1;
+            if (current_position < position)
+            {
+                current_position = position;
+            }
+        }
+        if ((servo_num >= 0 && servo_num < SERVO_NUM && current_position >= MIN_POS_VAL && current_position <= MAX_POS_VAL && servo_num != 1) || 
+            (servo_num == 1 && current_position >= SERVO_1_MIN_POS_VAL && current_position <= SERVO_1_MAX_POS_VAL))
         {
             float millis = static_cast<float>(current_position) / 1000;
-            // std::cout << "Setting absolute position for servo: " << servo_num << ", position: " << millis << std::endl;
             int tick = calcTicks(millis, HERTZ);
             pwmWrite(PIN_BASE + servo_num, tick);
             m_current_position[servo_num] = current_position;
-            std::this_thread::sleep_for(std::chrono::microseconds(500));
-        } else {
+            std::this_thread::sleep_for(std::chrono::microseconds(250));
+        }
+        else
+        {
             current_position = position;
         }
     }
 }
 
-void ServoController::moveLeft(int servo_num)
+void ServoController::moveLeft(int servo_num, uint8_t value)
 {
     if (servo_num == 1)
     {
-        setAbsolutePosition(m_current_position[servo_num] - 3, servo_num);
+        setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 6), servo_num);
     }
     else if (servo_num == 0 || servo_num == 3)
     {
-        setAbsolutePosition(m_current_position[servo_num] + 10, servo_num);
+        setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 20), servo_num);
     }
     else 
     {
-        setAbsolutePosition(m_current_position[servo_num] - 10, servo_num);
+        setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 20), servo_num);
     }
 }
 
-void ServoController::moveRight(int servo_num)
+void ServoController::moveRight(int servo_num, uint8_t value)
 {
     if (servo_num == 1)
     {
-        setAbsolutePosition(m_current_position[servo_num] + 3, servo_num);
+        setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 6), servo_num);
     }
     else if (servo_num == 0 || servo_num == 3)
     {
-        setAbsolutePosition(m_current_position[servo_num] - 10, servo_num);
+        setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 20), servo_num);
     }
     else
     {
-        setAbsolutePosition(m_current_position[servo_num] + 10, servo_num);
+        setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 20), servo_num);
     }
+}
+
+std::uint8_t ServoController::calculatePosition(uint8_t value, uint8_t max_step) const
+{
+    return (std::abs(127 - value) * max_step + 63) / 127;
 }

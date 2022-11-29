@@ -52,55 +52,64 @@ void ServoManager::servoDataReader()
             {
                 std::cerr << "Couldn't post reader semaphore." << std::endl;
             }
-            // TODO: write command parser
-            for (int i = 0; i < JoypadHandler::CONTROL_DATA_BINS; ++i)
-            {
-                if (m_joypad_data_previous.data[i] != m_joypad_data.data[i])
-                {
-                    m_joypad_data_types.parseJoypadData(m_joypad_data);
-                    if (m_joypad_data_types.leftTrigger)
-                    {
-                        --m_current_servo_l;
-                        if (m_current_servo_l < 1)
-                        {
-                            ++m_current_servo_l;
-                        }
-                    }
-
-                    if (m_joypad_data_types.leftBumper)
-                    {
-                        ++m_current_servo_l;
-                        if (m_current_servo_l > 5)
-                        {
-                            --m_current_servo_l;
-                        }
-                    }
-                    break;
-                }
-            }
-            if (m_joypad_data_types.leftStickX < 125)
-            {
-                m_servo_controller.moveLeft(m_current_servo_l);
-            } else if(m_joypad_data_types.leftStickX > 129) {
-                m_servo_controller.moveRight(m_current_servo_l);
-            }
-
-            if (m_joypad_data_types.rightStickX < 125)
-            {
-                m_servo_controller.moveLeft(0);
-            } else if(m_joypad_data_types.rightStickX > 129) {
-                m_servo_controller.moveRight(0);
-            }
-            for (int i = 0; i < JoypadHandler::CONTROL_DATA_BINS; ++i)
-            {
-                m_joypad_data_previous.data[i] = m_joypad_data.data[i];
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            praseJoypadData();
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
     munmap(m_data, JoypadHandler::CONTROL_DATA_BINS);
     close(m_joypad_shmem_fd);
     shm_unlink(JoypadShmemHandler::SHMEM_NAME);
+}
+
+void ServoManager::praseJoypadData()
+{
+    for (int i = 0; i < JoypadHandler::CONTROL_DATA_BINS; ++i)
+    {
+        if (m_joypad_data_previous.data[i] != m_joypad_data.data[i])
+        {
+            m_joypad_data_types.parseJoypadData(m_joypad_data);
+            break;
+        }
+    }
+
+    if (m_joypad_data_types.leftTrigger && m_joypad_data_previous.data[0] != 1)
+    {
+        --m_current_servo_l;
+        if (m_current_servo_l < 1)
+        {
+            ++m_current_servo_l;
+        }
+    }
+    if (m_joypad_data_types.leftBumper && m_joypad_data_previous.data[0] != 4)
+    {
+        ++m_current_servo_l;
+        if (m_current_servo_l > 5)
+        {
+            --m_current_servo_l;
+        }
+    }
+
+    if (m_joypad_data_types.leftStickX < 125)
+    {
+        m_servo_controller.moveLeft(m_current_servo_l, m_joypad_data_types.leftStickX);
+    } 
+    else if (m_joypad_data_types.leftStickX > 129)
+    {
+        m_servo_controller.moveRight(m_current_servo_l, 255 - m_joypad_data_types.leftStickX);
+    }
+    if (m_joypad_data_types.rightStickX < 125)
+    {
+        m_servo_controller.moveLeft(0, m_joypad_data_types.rightStickX);
+    }
+    else if (m_joypad_data_types.rightStickX > 129)
+    {
+        m_servo_controller.moveRight(0, 255 - m_joypad_data_types.rightStickX);
+    }
+
+    for (int i = 0; i < JoypadHandler::CONTROL_DATA_BINS; ++i)
+    {
+        m_joypad_data_previous.data[i] = m_joypad_data.data[i];
+    }
 }
 
 bool ServoManager::readJoypadManagerPid()
@@ -109,6 +118,7 @@ bool ServoManager::readJoypadManagerPid()
     if (!ifs.is_open())
     {
         std::cerr << "failed to open " << m_shmem_identifier << '\n';
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     else
     {

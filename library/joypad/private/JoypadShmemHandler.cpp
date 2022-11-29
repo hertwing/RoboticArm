@@ -58,6 +58,18 @@ void JoypadShmemHandler::createJoypadShmem()
             ftruncate(m_fd_shm, JoypadHandler::CONTROL_DATA_BINS);
             m_data = (std::uint8_t *)mmap(0, JoypadHandler::CONTROL_DATA_BINS, PROT_READ | PROT_WRITE, MAP_SHARED, m_fd_shm, 0);
         }
+        // Fill shmem with neutral values
+        for (int i = 0; i < JoypadHandler::CONTROL_DATA_BINS; ++i)
+        {
+            if (i < 3)
+            {
+                m_data[i] = 0;
+            }
+            else
+            {
+                m_data[i] = 127;
+            }
+        }
 
         if ((writer_sem = sem_open(writer_sem_name.c_str(), O_CREAT, 0660, 0)) == SEM_FAILED)
         {
