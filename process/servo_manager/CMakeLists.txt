@@ -6,16 +6,16 @@ add_executable(${PROJECT_NAME}
 )
 
 target_include_directories(${PROJECT_NAME}
-    PUBLIC public
+    PRIVATE public
     )
 
 target_link_libraries(${PROJECT_NAME}
-    PUBLIC library_joypad_handler
-    PUBLIC servo_library
-    PUBLIC wiringPi
-    PUBLIC rt
-    PUBLIC crypt
-    PUBLIC pthread
+    PRIVATE library_joypad_handler
+    PRIVATE servo_library
+    PRIVATE wiringPi
+    PRIVATE rt
+    PRIVATE crypt
+    PRIVATE pthread
     )
 
 install(TARGETS ${PROJECT_NAME} COMPONENT RoboticArm)
