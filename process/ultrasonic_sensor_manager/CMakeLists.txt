@@ -1,7 +1,7 @@
-project(camera_rotor_process)
+project(sonar_process)
 
 add_executable(${PROJECT_NAME}
-    private/CameraRotorProcess.cpp
+    private/libSonarSample.cpp
     )
 
 target_include_directories(${PROJECT_NAME}
@@ -9,5 +9,9 @@ target_include_directories(${PROJECT_NAME}
     )
 
 target_link_libraries(${PROJECT_NAME}
-    PRIVATE library_camera_rotor
+    PRIVATE library_sonar
+    PUBLIC wiringPi
+    PUBLIC rt
+    PUBLIC crypt
+    PUBLIC pthread
     )

@@ -17,3 +17,5 @@ target_link_libraries(${PROJECT_NAME}
     PUBLIC crypt
     PUBLIC pthread
     )
+
+install(TARGETS ${PROJECT_NAME} COMPONENT RoboticArm)

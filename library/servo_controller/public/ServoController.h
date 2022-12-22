@@ -54,7 +54,7 @@ public:
     ServoController();
     ~ServoController() = default;
 
-    void setAbsolutePosition(int position, int servo_num);
+    void setAbsolutePosition(int position, int servo_num, int step);
     void moveLeft(int servo_num, std::uint8_t value);
     void moveRight(int servo_num, std::uint8_t value);
 

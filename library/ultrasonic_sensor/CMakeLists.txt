@@ -1,11 +1,11 @@
-project(camera_rotor)
+project(sonar)
 
 set(HEADERS
-    public/CameraRotor.h
+    public/libSonar.h
     )
 
 set(SOURCES
-    private/CameraRotor.cpp
+    private/libSonar.cpp
     )
 
 add_library(library_${PROJECT_NAME}

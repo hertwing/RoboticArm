@@ -1,0 +1,7 @@
+#!/bin/bash
+
+mkdir -p /tmp/logs
+
+./bin/joypad_manager > /tmp/logs/joypad_manager.log 2>&1 &
+
+./bin/servo_manager > /tmp/logs/servo_manager.log 2>&1 &

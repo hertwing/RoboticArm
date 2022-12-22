@@ -1,4 +1,4 @@
-add_subdirectory(camera_rotor)
+add_subdirectory(ultrasonic_sensor)
 add_subdirectory(joypad)
 
 if (BUILD_ARM)
