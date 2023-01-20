@@ -2,7 +2,9 @@
 #define JOYPADHANDLER_H
 
 #include "JoypadData.h"
-#include "JoypadShmemHandler.h"
+// #include "JoypadShmemHandler.h"
+#include "ShmemHandler.h"
+#include <memory>
 
 class JoypadHandler
 {
@@ -22,6 +24,8 @@ public:
     static constexpr int CONTROL_DATA_BINS = 7;
     static constexpr const char * HIDRAW_PATH = "/dev/hidraw";
     static void signalCallbackHandler(int signum);
+
+    static constexpr const char * SHMEM_NAME = "controller_shmem_";
 
 private:
     bool checkJoypadConnection(const char *, std::size_t);
@@ -46,7 +50,8 @@ private:
     std::uint16_t m_connection_timeout_counter;
 
     JoypadDataTypes m_joypad_data;
-    JoypadShmemHandler m_joypad_shmem_handler;
+
+    std::unique_ptr<ShmemHandler<std::uint8_t>> m_shmem_handler;
 };
 
 #endif // JOYPADHANDLER_H

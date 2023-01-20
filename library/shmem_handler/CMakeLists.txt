@@ -1,27 +1,25 @@
-project(joypad_handler)
+project(shmem_handler)
 
 set(HEADERS
-    public/JoypadData.h
-    public/JoypadHandler.h
+    public/ShmemHandler.h
     )
 
-set(SOURCES
-    private/JoypadData.cpp
-    private/JoypadHandler.cpp
-    # private/JoypadShmemHandler.cpp
-    )
+# set(SOURCES
+#     private/ShmemHandler.cpp
+#     )
 
 add_library(library_${PROJECT_NAME}
-    ${SOURCES}
+    # ${SOURCES}
     ${HEADERS}
     )
+
+set_target_properties(library_${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE CXX)
 
 target_include_directories(library_${PROJECT_NAME}
     PUBLIC public
     )
 
 target_link_libraries(library_${PROJECT_NAME}
-    PUBLIC library_shmem_handler
     PUBLIC stdc++fs
     PUBLIC rt
     PUBLIC pthread

@@ -1,5 +1,5 @@
 #include "JoypadHandler.h"
-#include "JoypadShmemHandler.h"
+// #include "JoypadShmemHandler.h"
 
 #include <bitset>
 #include <chrono>
@@ -10,6 +10,7 @@
 #include <string.h>
 #include <thread>
 #include <unistd.h>
+#include <memory>
 
 namespace fs = std::experimental::filesystem;
 
@@ -18,7 +19,8 @@ bool JoypadHandler::m_run_process = true;
 JoypadHandler::JoypadHandler()
 {
     m_joypad_connected = false;
-    m_joypad_fd = -1;
+    m_shmem_handler = std::make_unique<ShmemHandler<std::uint8_t>>(SHMEM_NAME, std::to_string(getpid()).c_str(), "JoypadHandler", CONTROL_DATA_BINS, true, "ControllerSem");
+    m_shmem_handler->createShmem();
 }
 
 const JoypadDataTypes JoypadHandler::getJoypadData()
@@ -102,7 +104,8 @@ void JoypadHandler::connectAndRun()
                 if (m_previous_buffer[i] != m_buffer[i])
                 {
                     parseData(m_buffer);
-                    m_joypad_shmem_handler.writeJoypadData(m_joypad_data.createJoypadData());
+                    // m_joypad_shmem_handler.writeJoypadData(m_joypad_data.createJoypadData());
+                    m_shmem_handler->shmemWrite(m_joypad_data.createJoypadData().data);
                     for (int i = 0; i < BUFF_SIZE; ++i)
                     {
                         m_previous_buffer[i] = m_buffer[i];

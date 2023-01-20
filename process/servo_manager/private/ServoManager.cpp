@@ -20,6 +20,7 @@ ServoManager::ServoManager() :
     m_reader_sem_name = "";
     m_joypad_shmem_name = "";
     m_is_shmem_opened = false;
+    //m_shmem_handler = std::make_unique<ShmemHandler<std::uint8_t>>(SHMEM_NAME, std::to_string(getpid()).c_str(), "JoypadHandler", CONTROL_DATA_BINS, true, "ControllerSem");
 }
 
 void ServoManager::servoDataReader()
@@ -27,38 +28,20 @@ void ServoManager::servoDataReader()
     while (m_run_process)
     {
         if (readJoypadManagerPid())
+        // if (!m_is_shmem_opened)
         {
-            m_is_shmem_opened = openJoypadShmem();
+            m_is_shmem_opened = m_shmem_handler->openShmem();
         }
         if (m_is_shmem_opened)
         {
-            if (sem_wait(m_reader_sem) == -1)
-            {
-                std::cerr << "Couldn't wait reader semaphore." << std::endl;
-            }
-            if (sem_post(m_writer_sem) == -1)
-            {
-                std::cerr << "Couldn't post writer semaphore." << std::endl;
-            }
-            for (int i = 0; i < JoypadHandler::CONTROL_DATA_BINS; ++i)
-            {
-                m_joypad_data.data[i] = m_data[i];
-            }
-            if (sem_wait(m_writer_sem) == -1)
-            {
-                std::cerr << "Couldn't wait writer semaphore." << std::endl;
-            }
-            if (sem_post(m_reader_sem) == -1)
-            {
-                std::cerr << "Couldn't post reader semaphore." << std::endl;
-            }
+            m_shmem_handler->shmemRead(m_joypad_data.data);
             praseJoypadData();
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
-    munmap(m_data, JoypadHandler::CONTROL_DATA_BINS);
-    close(m_joypad_shmem_fd);
-    shm_unlink(JoypadShmemHandler::SHMEM_NAME);
+    // munmap(m_data, JoypadHandler::CONTROL_DATA_BINS);
+    // close(m_joypad_shmem_fd);
+    // shm_unlink(JoypadShmemHandler::SHMEM_NAME);
 }
 
 void ServoManager::praseJoypadData()
@@ -126,27 +109,31 @@ bool ServoManager::readJoypadManagerPid()
         getline(ifs, obtained_pid);
         if (obtained_pid.compare(m_joypad_manager_pid) != 0)
         {
+            std::cout << "Reading Joypad Manager PID" << std::endl;
             // if previous shmem fd was opened, close it before opening another
             if (m_is_shmem_opened)
             {
-                std::cout << "Shmem fd changed, closing previous one." << std::endl;
-                munmap(m_data, JoypadHandler::CONTROL_DATA_BINS);
-                close(m_joypad_shmem_fd);
-                shm_unlink(JoypadShmemHandler::SHMEM_NAME);
+                m_shmem_handler.reset(nullptr);
+                // std::cout << "Shmem fd changed, closing previous one." << std::endl;
+                // munmap(m_data, JoypadHandler::CONTROL_DATA_BINS);
+                // close(m_joypad_shmem_fd);
+                // shm_unlink(JoypadShmemHandler::SHMEM_NAME);
             }
             m_joypad_manager_pid = obtained_pid;
-            m_writer_sem_name = std::string(JoypadShmemHandler::WRITER_SEM_NAME) + m_joypad_manager_pid;
-            m_reader_sem_name = std::string(JoypadShmemHandler::READER_SEM_NAME) + m_joypad_manager_pid;
-            m_joypad_shmem_name = std::string(JoypadShmemHandler::SHMEM_NAME) + m_joypad_manager_pid;
+            m_writer_sem_name = std::string("ControllerSem_writer_") + m_joypad_manager_pid;
+            m_reader_sem_name = std::string("ControllerSem_reader_") + m_joypad_manager_pid;
+            m_joypad_shmem_name = std::string(SHMEM_NAME) + m_joypad_manager_pid;
             // TODO: move this
-            if ((m_writer_sem = sem_open(m_writer_sem_name.c_str(), 0, 0, 0)) == SEM_FAILED)
-            {
-                std::cerr << "Couldn't create semaphore " + m_writer_sem_name << std::endl;
-            }
-            if ((m_reader_sem = sem_open(m_reader_sem_name.c_str(), 0, 0, 0)) == SEM_FAILED)
-            {
-                std::cerr << "Couldn't create semaphore " + m_reader_sem_name << std::endl;
-            }
+            // if ((m_writer_sem = sem_open(m_writer_sem_name.c_str(), 0, 0, 0)) == SEM_FAILED)
+            // {
+            //     std::cerr << "Couldn't create semaphore " + m_writer_sem_name << std::endl;
+            // }
+            // if ((m_reader_sem = sem_open(m_reader_sem_name.c_str(), 0, 0, 0)) == SEM_FAILED)
+            // {
+            //     std::cerr << "Couldn't create semaphore " + m_reader_sem_name << std::endl;
+            // }
+            std::cout << "Creating shmem handler" << std::endl;
+            m_shmem_handler = std::make_unique<ShmemHandler<std::uint8_t>>(SHMEM_NAME, m_joypad_manager_pid.c_str(), "JoypadHandler", CONTROL_DATA_BINS, true, "ControllerSem", true);
             return true;
         }
     }
