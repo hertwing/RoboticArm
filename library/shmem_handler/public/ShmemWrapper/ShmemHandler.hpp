@@ -67,14 +67,13 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_bins, const char
         m_is_shmem_opened = false;
     }
 
-    m_shmem_name = std::string(shmem_name);
+    m_shmem_name = static_cast<std::string>(shmem_name);
     m_shmem_name_with_id = m_shmem_name + m_identifier_num;
-    m_writer_sem_name = std::string(m_sem_name) + "_writer_" + m_identifier_num;
-    m_reader_sem_name = std::string(m_sem_name) + "_reader_" + m_identifier_num;
-    std::cout << m_writer_sem_name << std::endl;
-    std::cout << m_reader_sem_name << std::endl;
 
-    m_shmem_identifier_path = std::string(DataTypes::SHMEM_IDENTIFIER_PATH) + std::string(m_shmem_name) + std::string(DataTypes::SHMEM_IDENTIFIER_NAME);
+    m_writer_sem_name = static_cast<std::string>(m_sem_name) + "_writer_" + m_identifier_num;
+    m_reader_sem_name = static_cast<std::string>(m_sem_name) + "_reader_" + m_identifier_num;
+
+    m_shmem_identifier_path = static_cast<std::string>(DataTypes::SHMEM_IDENTIFIER_PATH) + m_shmem_name + DataTypes::SHMEM_IDENTIFIER_NAME;
 }
 
 template <typename T>
@@ -107,7 +106,7 @@ bool ShmemHandler<T>::createShmem()
         {
             if (!std::filesystem::create_directories(DataTypes::SHMEM_IDENTIFIER_PATH))
             {
-                std::cerr << "Couldn't create directory " + std::string(DataTypes::SHMEM_IDENTIFIER_PATH) << std::endl;
+                std::cerr << "Couldn't create directory " + static_cast<std::string>(DataTypes::SHMEM_IDENTIFIER_PATH) << std::endl;
                 return 0;
             }
             else 
@@ -146,6 +145,7 @@ bool ShmemHandler<T>::createShmem()
             if ((m_writer_sem = sem_open(m_writer_sem_name.c_str(), O_CREAT, 0660, 0)) == SEM_FAILED)
             {
                 std::cerr << "Couldn't create semaphore " + m_writer_sem_name << std::endl;
+                // TODO: Delete shmem if coudln't create semaphores
                 return 0;
             }
             if ((m_reader_sem = sem_open(m_reader_sem_name.c_str(), O_CREAT, 0660, 0)) == SEM_FAILED)
@@ -181,6 +181,7 @@ bool ShmemHandler<T>::openShmem()
             if (m_shmem_fd < 0)
             {
                 std::cerr << "Couldn't open shmem fd." << std::endl;
+                std::this_thread::sleep_for(std::chrono::seconds(1));
                 return 0;
             }
             m_data = (T *)mmap(0, m_shmem_data_bins, PROT_READ, MAP_SHARED, m_shmem_fd, 0);
