@@ -34,20 +34,24 @@ public:
 private:
     bool m_use_semaphores;
     bool m_is_reader;
+    bool m_is_shmem_opened;
+
     std::string m_shmem_name;
     std::string m_shmem_name_with_id;
     std::string m_sem_name;
-    std::int64_t m_shmem_fd;
-    T * m_data;
-    std::string m_identifier_num;
-    int m_shmem_data_bins;
-    sem_t * m_writer_sem;
-    sem_t * m_reader_sem;
     std::string m_writer_sem_name;
     std::string m_reader_sem_name;
     std::string m_shmem_identifier_path;
+    std::string m_identifier_num;
 
-    bool m_is_shmem_opened = false;
+    std::int64_t m_shmem_fd;
+
+    T * m_data;
+
+    int m_shmem_data_bins;
+
+    sem_t * m_writer_sem;
+    sem_t * m_reader_sem;
 };
 
 template <typename T>
@@ -58,6 +62,11 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_bins, const char
     m_use_semaphores(use_semaphores),
     m_is_reader(is_reader)
 {
+    if (m_is_reader)
+    {
+        m_is_shmem_opened = false;
+    }
+
     m_shmem_name = std::string(shmem_name);
     m_shmem_name_with_id = m_shmem_name + m_identifier_num;
     m_writer_sem_name = std::string(m_sem_name) + "_writer_" + m_identifier_num;
@@ -71,6 +80,7 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_bins, const char
 template <typename T>
 ShmemHandler<T>::~ShmemHandler()
 {
+    // Close shmem fd only if writer process is closing
     if (!m_is_reader)
     {
         std::cout << "Closing shmem." << std::endl;
@@ -273,14 +283,7 @@ bool ShmemHandler<T>::readShmemId()
         {
             std::cout << "m_identifier_num: " << m_identifier_num << std::endl;
             std::cout << "Obtained pid: " << obtained_pid << std::endl;
-            // if previous shmem fd was opened, close it before opening another
-            if (m_is_shmem_opened)
-            {
-                std::cout << "Shmem fd changed, closing previous one." << std::endl;
-                munmap(m_data, m_shmem_data_bins);
-                close(m_shmem_fd);
-                shm_unlink(m_shmem_name_with_id.c_str());
-            }
+
             m_is_shmem_opened = false;
             std::cout << "Reading Joypad Manager PID" << std::endl;
             m_identifier_num = obtained_pid;
