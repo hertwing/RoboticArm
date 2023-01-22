@@ -4,7 +4,7 @@
 #include "ServoController.h"
 #include "JoypadData.h"
 #include "JoypadHandler.h"
-#include "ShmemHandler.h"
+#include "ShmemHandler.hpp"
 
 #include <array>
 #include <string>

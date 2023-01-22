@@ -1,7 +1,9 @@
 project(shmem_handler)
 
 set(HEADERS
-    public/ShmemHandler.h
+    public/ShmemHandler.hpp
+    public/DataTypes.h
+    # private/ShmemHandler.hpp
     )
 
 # set(SOURCES

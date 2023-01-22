@@ -3,7 +3,7 @@
 
 #include "JoypadData.h"
 // #include "JoypadShmemHandler.h"
-#include "ShmemHandler.h"
+#include "ShmemHandler.hpp"
 #include <memory>
 
 class JoypadHandler
