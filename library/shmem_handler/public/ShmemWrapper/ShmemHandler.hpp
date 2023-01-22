@@ -1,10 +1,9 @@
 #ifndef SHMEMHANDLER_H
 #define SHMEMHANDLER_H
 
+#include "DataTypes.h"
 #include <semaphore.h>
 #include <cstdint>
-
-
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -14,6 +13,8 @@
 #include <unistd.h>
 #include <thread>
 #include <chrono>
+
+namespace ShmemWrapper {
 
 template <typename T>
 class ShmemHandler {
@@ -29,10 +30,6 @@ public:
     bool shmemRead(T *);
 
     bool readShmemId();
-
-public:
-    static constexpr const char * SHMEM_IDENTIFIER_PATH = "/tmp/arm_shm/";
-    static constexpr const char * SHMEM_IDENTIFIER_NAME = "_shmem_identifier.txt";
 
 private:
     bool m_use_semaphores;
@@ -68,7 +65,7 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_bins, const char
     std::cout << m_writer_sem_name << std::endl;
     std::cout << m_reader_sem_name << std::endl;
 
-    m_shmem_identifier_path = std::string(SHMEM_IDENTIFIER_PATH) + std::string(m_shmem_name) + std::string(SHMEM_IDENTIFIER_NAME);
+    m_shmem_identifier_path = std::string(DataTypes::SHMEM_IDENTIFIER_PATH) + std::string(m_shmem_name) + std::string(DataTypes::SHMEM_IDENTIFIER_NAME);
 }
 
 template <typename T>
@@ -96,11 +93,11 @@ bool ShmemHandler<T>::createShmem()
     }
     else
     {
-        if (!std::filesystem::exists(SHMEM_IDENTIFIER_PATH))
+        if (!std::filesystem::exists(DataTypes::SHMEM_IDENTIFIER_PATH))
         {
-            if (!std::filesystem::create_directories(SHMEM_IDENTIFIER_PATH))
+            if (!std::filesystem::create_directories(DataTypes::SHMEM_IDENTIFIER_PATH))
             {
-                std::cerr << "Couldn't create directory " + std::string(SHMEM_IDENTIFIER_PATH) << std::endl;
+                std::cerr << "Couldn't create directory " + std::string(DataTypes::SHMEM_IDENTIFIER_PATH) << std::endl;
                 return 0;
             }
             else 
@@ -298,5 +295,7 @@ bool ShmemHandler<T>::readShmemId()
     }
     return 0;
 }
+
+} // ShmemWrapper
 
 #endif //SHMEMHANDLER_H

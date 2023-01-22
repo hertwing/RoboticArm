@@ -1,5 +1,5 @@
 #include "JoypadHandler.h"
-#include "DataTypes.h"
+#include "ShmemWrapper/DataTypes.h"
 
 #include <bitset>
 #include <chrono>
@@ -19,7 +19,7 @@ bool JoypadHandler::m_run_process = true;
 JoypadHandler::JoypadHandler()
 {
     m_joypad_connected = false;
-    m_shmem_handler = std::make_unique<ShmemHandler<std::uint8_t>>(DataTypes::JOYPAD_SHMEM_NAME, CONTROL_DATA_BINS, std::to_string(getpid()).c_str(), true, DataTypes::JOYPAD_SEM_NAME);
+    m_shmem_handler = std::make_unique<ShmemWrapper::ShmemHandler<std::uint8_t>>(ShmemWrapper::DataTypes::JOYPAD_SHMEM_NAME, CONTROL_DATA_BINS, std::to_string(getpid()).c_str(), true, ShmemWrapper::DataTypes::JOYPAD_SEM_NAME);
     m_shmem_handler->createShmem();
 }
 
@@ -104,7 +104,6 @@ void JoypadHandler::connectAndRun()
                 if (m_previous_buffer[i] != m_buffer[i])
                 {
                     parseData(m_buffer);
-                    // m_joypad_shmem_handler.writeJoypadData(m_joypad_data.createJoypadData());
                     m_shmem_handler->shmemWrite(m_joypad_data.createJoypadData().data);
                     for (int i = 0; i < BUFF_SIZE; ++i)
                     {

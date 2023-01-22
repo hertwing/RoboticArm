@@ -8,7 +8,6 @@ set(HEADERS
 set(SOURCES
     private/JoypadData.cpp
     private/JoypadHandler.cpp
-    # private/JoypadShmemHandler.cpp
     )
 
 add_library(library_${PROJECT_NAME}
