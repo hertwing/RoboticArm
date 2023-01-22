@@ -127,19 +127,6 @@ bool ShmemHandler<T>::createShmem()
             m_data = (T *)mmap(0, m_shmem_data_bins, PROT_READ | PROT_WRITE, MAP_SHARED, m_shmem_fd, 0);
         }
 
-        // Fill shmem with neutral values
-        for (int i = 0; i < m_shmem_data_bins; ++i)
-        {
-            if (i < 3)
-            {
-                m_data[i] = 0;
-            }
-            else
-            {
-                m_data[i] = 127;
-            }
-        }
-
         if (m_use_semaphores)
         {
             if ((m_writer_sem = sem_open(m_writer_sem_name.c_str(), O_CREAT, 0660, 0)) == SEM_FAILED)

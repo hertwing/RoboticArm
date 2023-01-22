@@ -21,6 +21,20 @@ JoypadHandler::JoypadHandler()
     m_joypad_connected = false;
     m_shmem_handler = std::make_unique<ShmemWrapper::ShmemHandler<std::uint8_t>>(ShmemWrapper::DataTypes::JOYPAD_SHMEM_NAME, CONTROL_DATA_BINS, std::to_string(getpid()).c_str(), true, ShmemWrapper::DataTypes::JOYPAD_SEM_NAME);
     m_shmem_handler->createShmem();
+
+    // Fill shmem with neutral robot position data
+    for (int i = 0; i < CONTROL_DATA_BINS; ++i)
+    {
+        if (i < 3)
+        {
+            m_joypad_data_neutral_values.data[i] = 0;
+        }
+        else
+        {
+            m_joypad_data_neutral_values.data[i] = 127;
+        }
+    }
+    m_shmem_handler->shmemWrite(m_joypad_data_neutral_values.data);
 }
 
 const JoypadDataTypes JoypadHandler::getJoypadData()
