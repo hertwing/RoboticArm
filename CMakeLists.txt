@@ -13,4 +13,4 @@ add_subdirectory(library)
 add_subdirectory(process)
 add_subdirectory(startup)
 
-SET(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -lstdc++fs")
+SET(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -lstdc++fscd")

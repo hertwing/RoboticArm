@@ -37,25 +37,25 @@ extern int pca9685Setup(const int pinBase, const int i2cAddress/* = 0x40*/, floa
 // You now have access to the following wiringPi functions:
 //
 // void pwmWrite (int pin, int value)
-//		if value <= 0, set full-off
-//		else if value >= 4096, set full-on
-//		else set PWM
+//        if value <= 0, set full-off
+//        else if value >= 4096, set full-on
+//        else set PWM
 //
 // void digitalWrite (int pin, int value)
-// 		if value != 0, set full-on
-//		else set full-off
+//         if value != 0, set full-on
+//        else set full-off
 //
 // int digitalRead (int pin)
-//		read off-register
-//		To get PWM: mask with 0xFFF
-//		To get full-off bit: mask with 0x1000
-//		Note: ALL_LED pin will always return 0
+//        read off-register
+//        To get PWM: mask with 0xFFF
+//        To get full-off bit: mask with 0x1000
+//        Note: ALL_LED pin will always return 0
 //
 // int analogRead (int pin)
-//		read on-register
-//		To get PWM: mask with 0xFFF
-//		To get full-on bit: mask with 0x1000
-//		Note: ALL_LED pin will always return 0
+//        read on-register
+//        To get PWM: mask with 0xFFF
+//        To get full-on bit: mask with 0x1000
+//        Note: ALL_LED pin will always return 0
 
 
 

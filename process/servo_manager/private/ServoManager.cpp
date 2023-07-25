@@ -1,5 +1,6 @@
 #include "ServoManager.h"
 #include "ShmemWrapper/DataTypes.h"
+#include "tanos/led_handler/DataTypes.h"
 
 #include <chrono>
 #include <fstream>
@@ -22,7 +23,9 @@ ServoManager::ServoManager() :
     m_joypad_shmem_name = "";
     m_is_shmem_opened = false;
 
-    m_shmem_handler = std::make_unique<ShmemWrapper::ShmemHandler<std::uint8_t>>(ShmemWrapper::DataTypes::JOYPAD_SHMEM_NAME, CONTROL_DATA_BINS, "", true, ShmemWrapper::DataTypes::JOYPAD_SEM_NAME, true);
+    m_shmem_handler = std::make_unique<ShmemWrapper::ShmemHandler<std::uint8_t>>(
+        ShmemWrapper::DataTypes::JOYPAD_SHMEM_NAME, CONTROL_DATA_BINS, "", true, ShmemWrapper::DataTypes::JOYPAD_SEM_NAME, true);
+    m_led_handler.setJoypadSelectionColor(m_current_servo_l, m_current_servo_r);
 }
 
 void ServoManager::servoDataReader()
@@ -62,6 +65,7 @@ void ServoManager::praseJoypadData()
         {
             ++m_current_servo_l;
         }
+        m_led_handler.setJoypadSelectionColor(m_current_servo_l, m_current_servo_r);
     }
     if (m_joypad_data_types.leftBumper && m_joypad_data_previous.data[0] != 4)
     {
@@ -70,6 +74,7 @@ void ServoManager::praseJoypadData()
         {
             --m_current_servo_l;
         }
+        m_led_handler.setJoypadSelectionColor(m_current_servo_l, m_current_servo_r);
     }
 
     if (m_joypad_data_types.leftStickX < 125)

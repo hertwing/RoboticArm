@@ -1,13 +1,12 @@
-project(servo_library)
+project(led_library)
 
 set(HEADERS
-    public/pca9685.h
-    public/ServoController.h
+    public/tanos/led_handler/LedHandler.h
+    public/tanos/led_handler/DataTypes.h
     )
 
 set(SOURCES
-    private/pca9685.c
-    private/ServoController.cpp
+    private/LedHandler.cpp
     )
 
 add_library(${PROJECT_NAME}
@@ -16,10 +15,7 @@ add_library(${PROJECT_NAME}
     )
 
 target_link_libraries(${PROJECT_NAME}
-    PRIVATE wiringPi
-    PRIVATE rt
-    PRIVATE crypt
-    PRIVATE pthread
+    PUBLIC ws2811
     )
 
 target_include_directories(${PROJECT_NAME}

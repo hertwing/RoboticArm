@@ -2,7 +2,6 @@
 #define JOYPADHANDLER_H
 
 #include "JoypadData.h"
-// #include "JoypadShmemHandler.h"
 #include "ShmemWrapper/ShmemHandler.hpp"
 #include <memory>
 
@@ -15,7 +14,7 @@ public:
     bool isJoypadConnected();
     void connectAndRun();
     const JoypadDataTypes getJoypadData();
-    void setProcessStatus(const bool);
+    // void setProcessStatus(const bool);
 
 public:
     static constexpr int GENESYS_BYTES_NUM = 27;

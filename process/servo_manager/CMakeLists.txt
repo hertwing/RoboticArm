@@ -10,13 +10,9 @@ target_include_directories(${PROJECT_NAME}
     )
 
 target_link_libraries(${PROJECT_NAME}
-    # PRIVATE library_shmem_handler
     PRIVATE library_joypad_handler
     PRIVATE servo_library
-    PRIVATE wiringPi
-    PRIVATE rt
-    PRIVATE crypt
-    PRIVATE pthread
+    PRIVATE led_library
     )
 
 install(TARGETS ${PROJECT_NAME} COMPONENT RoboticArm)

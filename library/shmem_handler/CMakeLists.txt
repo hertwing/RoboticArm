@@ -3,15 +3,10 @@ project(shmem_handler)
 set(HEADERS
     public/ShmemWrapper/ShmemHandler.hpp
     public/ShmemWrapper/DataTypes.h
-    # private/ShmemHandler.hpp
     )
 
-# set(SOURCES
-#     private/ShmemHandler.cpp
-#     )
 
 add_library(library_${PROJECT_NAME}
-    # ${SOURCES}
     ${HEADERS}
     )
 

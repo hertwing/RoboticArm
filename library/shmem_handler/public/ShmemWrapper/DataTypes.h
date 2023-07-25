@@ -1,5 +1,5 @@
-#ifndef DATATYPES_H
-#define DATATYPES_H
+#ifndef SHMEMHANDLER_DATATYPES_H
+#define SHMEMHANDLER_DATATYPES_H
 
 namespace ShmemWrapper {
 
@@ -9,8 +9,11 @@ struct DataTypes {
 
     static constexpr const char * JOYPAD_SHMEM_NAME = "ControllerShmem";
     static constexpr const char * JOYPAD_SEM_NAME = "JoypadSem";
+
+    // static constexpr const char * LED_SHMEM_NAME = "LedShmem";
+    // static constexpr const char * LED_SEM_NAME = "LedSem";
 };
 
 } // ShmemWrapper
 
-#endif // DATATYPES_H
+#endif // SHMEMHANDLER_DATATYPES_H

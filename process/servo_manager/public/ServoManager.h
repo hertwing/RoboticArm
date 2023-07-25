@@ -4,6 +4,7 @@
 #include "ServoController.h"
 #include "JoypadData.h"
 #include "JoypadHandler.h"
+#include "tanos/led_handler/LedHandler.h"
 #include "ShmemWrapper/ShmemHandler.hpp"
 
 #include <array>
@@ -27,6 +28,7 @@ private:
     JoypadData m_joypad_data_previous;
     JoypadDataTypes m_joypad_data_types;
     ServoController m_servo_controller;
+    LedHandler m_led_handler;
     std::string m_joypad_manager_pid;
     // TODO: Change paths definitions from ShmemHandler
     const std::string m_shmem_identifier = std::string(ShmemWrapper::DataTypes::SHMEM_IDENTIFIER_PATH) + "JoypadHandler" + std::string(ShmemWrapper::DataTypes::SHMEM_IDENTIFIER_NAME);
@@ -39,9 +41,6 @@ private:
     bool m_is_shmem_opened;
 
     std::uint8_t * m_data;
-
-    // sem_t * m_writer_sem;
-    // sem_t * m_reader_sem;
 
     int m_current_servo_l = 1;
     int m_current_servo_r = 0;
