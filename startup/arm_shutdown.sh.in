@@ -1,5 +1,5 @@
 #!/bin/bash
 
+kill -SIGINT $(ps aux | grep -e led_manager | awk '{ print $2 }')
 kill -SIGINT $(ps aux | grep -e joypad_manager | awk '{ print $2 }')
 kill -SIGINT $(ps aux | grep -e servo_manager | awk '{ print $2 }')
-kill -SIGINT $(ps aux | grep -e led_manager | awk '{ print $2 }')

@@ -34,7 +34,7 @@ LedHandler::LedHandler()
     ws2811_init(&m_ledstring);
     turnAllLedsOff();
     m_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<ws2811_led_t>>(
-        shmem_wrapper::DataTypes::LED_SHMEM_NAME, led_handler::LED_COUNT, std::to_string(getpid()).c_str(), true, shmem_wrapper::DataTypes::LED_SEM_NAME, true);
+        shmem_wrapper::DataTypes::LED_SHMEM_NAME, led_handler::LED_COUNT, "", true, shmem_wrapper::DataTypes::LED_SEM_NAME, false);
     m_is_color_changed = false;
 }
 
@@ -73,7 +73,6 @@ void LedHandler::updateLedColors()
         if (m_shmem_handler->shmemRead(m_led_color_status))
         {
             // Check if colors changed
-
             std::cout << "Updating Led colors" << std::endl;
             for (int i = 0; i < led_handler::LED_COUNT; ++i)
             {

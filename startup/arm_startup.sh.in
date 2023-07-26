@@ -2,8 +2,6 @@
 
 mkdir -p /tmp/logs
 
-./bin/led_manager > /tmp/logs/led_manager.log 2>&1 &
-
 ./bin/joypad_manager > /tmp/logs/joypad_manager.log 2>&1 &
-
 ./bin/servo_manager > /tmp/logs/servo_manager.log 2>&1 &
+./bin/led_manager > /tmp/logs/led_manager.log 2>&1 &

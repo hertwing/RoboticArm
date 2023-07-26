@@ -21,12 +21,8 @@ ServoManager::ServoManager() :
     m_joypad_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<std::uint8_t>>(
         shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, JOYPAD_CONTROL_DATA_BINS, "", true, shmem_wrapper::DataTypes::JOYPAD_SEM_NAME, false);
     m_led_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<ws2811_led_t>>(
-        shmem_wrapper::DataTypes::LED_SHMEM_NAME, led_handler::LED_COUNT, "", true, shmem_wrapper::DataTypes::LED_SEM_NAME, false);
-
-    for (int i = 0; i < led_handler::LED_COUNT; ++i)
-    {
-        m_led_color_status[i] = led_handler::LED_COLOR_NONE;
-    }
+        shmem_wrapper::DataTypes::LED_SHMEM_NAME, led_handler::LED_COUNT, std::to_string(getpid()).c_str(), true, shmem_wrapper::DataTypes::LED_SEM_NAME, true);
+    updateLedColors();
 }
 
 void ServoManager::servoDataReader()
@@ -108,6 +104,10 @@ void ServoManager::praseJoypadData()
 
 void ServoManager::updateLedColors()
 {
+    for (int i = 0; i < led_handler::LED_COUNT; ++i)
+    {
+        m_led_color_status[i] = led_handler::LED_COLOR_NONE;
+    }
     m_led_color_status[m_current_servo_l] = led_handler::LED_COLOR_BLUE;
     m_led_color_status[m_current_servo_r] = led_handler::LED_COLOR_GREEN;
     m_led_shmem_handler->shmemWrite(m_led_color_status);

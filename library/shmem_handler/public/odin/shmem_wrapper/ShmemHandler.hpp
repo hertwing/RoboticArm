@@ -63,15 +63,12 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_bins, const char
     m_is_owner(is_owner)
 {
     m_shmem_name = static_cast<std::string>(shmem_name);
-    std::cout << "shmem name: " << m_shmem_name << std::endl;
     m_shmem_name_with_id = m_shmem_name + m_identifier_num;
-    std::cout << "shmem name: " << m_shmem_name_with_id << std::endl;
 
     m_writer_sem_name = static_cast<std::string>(m_sem_name) + "_writer_" + m_identifier_num;
     m_reader_sem_name = static_cast<std::string>(m_sem_name) + "_reader_" + m_identifier_num;
 
     m_shmem_identifier_path = static_cast<std::string>(shmem_wrapper::DataTypes::SHMEM_IDENTIFIER_PATH) + m_shmem_name + shmem_wrapper::DataTypes::SHMEM_IDENTIFIER_NAME;
-    std::cout << "shmem path: " << m_shmem_identifier_path << std::endl;
 
     if (!m_is_owner)
     {
@@ -201,7 +198,6 @@ bool ShmemHandler<T>::openShmem()
 template <typename T>
 bool ShmemHandler<T>::shmemWrite(const T * data)
 {
-    std::cout << "Writing to shmem fd." << std::endl;
     if (sem_wait(m_writer_sem) == -1)
     {
         std::cerr << "Couldn't wait writer semaphore." << std::endl;
