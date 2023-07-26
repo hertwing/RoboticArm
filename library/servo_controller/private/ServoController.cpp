@@ -74,7 +74,14 @@ void ServoController::setAbsolutePosition(int position, int servo_num, int step 
             int tick = calcTicks(millis, HERTZ);
             pwmWrite(PIN_BASE + servo_num, tick);
             m_current_position[servo_num] = current_position;
-            std::this_thread::sleep_for(std::chrono::microseconds(500));
+            if (step < 3)
+            {
+                std::this_thread::sleep_for(std::chrono::microseconds(10000));
+            } else 
+            {
+                std::this_thread::sleep_for(std::chrono::microseconds(1000));
+            }
+            
         }
         else
         {
@@ -85,48 +92,32 @@ void ServoController::setAbsolutePosition(int position, int servo_num, int step 
 
 void ServoController::moveLeft(int servo_num, uint8_t value)
 {
-    if (servo_num == 0)
+    if (servo_num == 1)
     {
-        // setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 30), servo_num);
-        setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 15), servo_num, calculatePosition(value, 15));
-    }
-    else if (servo_num == 1)
-    {
-        // setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 6), servo_num);
         setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 4), servo_num, calculatePosition(value, 4));
     }
     else if (servo_num == 0 || servo_num == 3)
     {
-        // setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 30), servo_num);
         setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 10), servo_num, calculatePosition(value, 10));
     }
     else 
     {
-        // setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 30), servo_num);
         setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 10), servo_num, calculatePosition(value, 10));
     }
 }
 
 void ServoController::moveRight(int servo_num, uint8_t value)
 {
-    if (servo_num == 0)
+    if (servo_num == 1)
     {
-        // setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 30), servo_num);
-        setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 15), servo_num, calculatePosition(value, 15));
-    }
-    else if (servo_num == 1)
-    {
-        // setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 6), servo_num);
         setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 4), servo_num, calculatePosition(value, 4));
     }
     else if (servo_num == 0 || servo_num == 3)
     {
-        // setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 30), servo_num);
         setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 10), servo_num, calculatePosition(value, 10));
     }
     else
     {
-        // setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 30), servo_num);
         setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 10), servo_num, calculatePosition(value, 10));
     }
 }

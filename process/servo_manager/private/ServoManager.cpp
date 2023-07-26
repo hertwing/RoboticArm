@@ -1,5 +1,5 @@
 #include "ServoManager.h"
-#include "ShmemWrapper/DataTypes.h"
+#include "tanos/shmem_wrapper/DataTypes.h"
 #include "tanos/led_handler/DataTypes.h"
 
 #include <chrono>
@@ -18,13 +18,8 @@ bool ServoManager::m_run_process = true;
 ServoManager::ServoManager() :
     m_servo_controller()
 {
-    m_writer_sem_name = "";
-    m_reader_sem_name = "";
-    m_joypad_shmem_name = "";
-    m_is_shmem_opened = false;
-
-    m_shmem_handler = std::make_unique<ShmemWrapper::ShmemHandler<std::uint8_t>>(
-        ShmemWrapper::DataTypes::JOYPAD_SHMEM_NAME, CONTROL_DATA_BINS, "", true, ShmemWrapper::DataTypes::JOYPAD_SEM_NAME, true);
+    m_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<std::uint8_t>>(
+        shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, CONTROL_DATA_BINS, "", true, shmem_wrapper::DataTypes::JOYPAD_SEM_NAME, true);
     m_led_handler.setJoypadSelectionColor(m_current_servo_l, m_current_servo_r);
 }
 
@@ -98,19 +93,6 @@ void ServoManager::praseJoypadData()
     {
         m_joypad_data_previous.data[i] = m_joypad_data.data[i];
     }
-}
-
-bool ServoManager::openJoypadShmem()
-{
-    std::cout << "Opening shmem fd: " << m_joypad_shmem_name << std::endl;
-    m_joypad_shmem_fd = shm_open(m_joypad_shmem_name.c_str(), O_RDONLY, 0666);
-    if (m_joypad_shmem_fd < 0)
-    {
-        std::cerr << "Couldn't open joypad shmem." << std::endl;
-        return false;
-    }
-    m_data = (std::uint8_t *)mmap(0, JoypadHandler::CONTROL_DATA_BINS, PROT_READ, MAP_SHARED, m_joypad_shmem_fd, 0);
-    return true;
 }
 
 void ServoManager::runProcess()

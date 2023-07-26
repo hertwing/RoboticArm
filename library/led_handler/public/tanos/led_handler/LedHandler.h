@@ -1,9 +1,11 @@
 #ifndef LEDHANDLER_H
 #define LEDHANDLER_H
 
+#include "tanos/shmem_wrapper/ShmemHandler.hpp"
+#include "DataTypes.h"
+
 #include <ws2811.h>
 #include <cstdint>
-#include "DataTypes.h"
 
 class LedHandler
 {
@@ -16,6 +18,7 @@ public:
     void setJoypadSelectionColor(std::uint8_t left_analog_servo_num, std::uint8_t right_analog_servo_num);
 private:
     ws2811_t m_ledstring;
+    std::unique_ptr<ShmemWrapper::ShmemHandler<LedState>> m_shmem_handler;
 };
 
 #endif // LEDHANDLER_H

@@ -2,7 +2,7 @@
 #define JOYPADHANDLER_H
 
 #include "JoypadData.h"
-#include "ShmemWrapper/ShmemHandler.hpp"
+#include "tanos/shmem_wrapper/ShmemHandler.hpp"
 #include <memory>
 
 class JoypadHandler
@@ -50,7 +50,7 @@ private:
 
     JoypadData m_joypad_data_neutral_values;
 
-    std::unique_ptr<ShmemWrapper::ShmemHandler<std::uint8_t>> m_shmem_handler;
+    std::unique_ptr<shmem_wrapper::ShmemHandler<std::uint8_t>> m_shmem_handler;
 };
 
 #endif // JOYPADHANDLER_H

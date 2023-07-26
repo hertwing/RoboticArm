@@ -20,4 +20,14 @@ static constexpr ws2811_led_t LED_COLOR_BLUE = 0x00000020;
 static constexpr ws2811_led_t LED_COLOR_PURPLE = 0x00100010;
 static constexpr ws2811_led_t LED_COLOR_PINK = 0x00200010;
 
+struct LedState
+{
+    ws2811_led_t BASE_ROTOR_LED;
+    ws2811_led_t JOINT_ONE_LED;
+    ws2811_led_t JOINT_TWO_LED;
+    ws2811_led_t JOINT_THREE_LED;
+    ws2811_led_t GRIPPER_BASE_LED;
+    ws2811_led_t GRIPPER_LED;
+};
+
 #endif // LEDHANDLERDATATYPES_H

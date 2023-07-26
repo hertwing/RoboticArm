@@ -1,8 +1,8 @@
 project(shmem_handler)
 
 set(HEADERS
-    public/ShmemWrapper/ShmemHandler.hpp
-    public/ShmemWrapper/DataTypes.h
+    public/tanos/shmem_wrapper/ShmemHandler.hpp
+    public/tanos/shmem_wrapper/DataTypes.h
     )
 
 

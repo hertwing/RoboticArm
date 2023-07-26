@@ -5,7 +5,7 @@
 #include "JoypadData.h"
 #include "JoypadHandler.h"
 #include "tanos/led_handler/LedHandler.h"
-#include "ShmemWrapper/ShmemHandler.hpp"
+#include "tanos/shmem_wrapper/ShmemHandler.hpp"
 
 #include <array>
 #include <string>
@@ -30,28 +30,17 @@ private:
     ServoController m_servo_controller;
     LedHandler m_led_handler;
     std::string m_joypad_manager_pid;
-    // TODO: Change paths definitions from ShmemHandler
-    const std::string m_shmem_identifier = std::string(ShmemWrapper::DataTypes::SHMEM_IDENTIFIER_PATH) + "JoypadHandler" + std::string(ShmemWrapper::DataTypes::SHMEM_IDENTIFIER_NAME);
-
-    std::string m_writer_sem_name;
-    std::string m_reader_sem_name;
-    std::string m_joypad_shmem_name;
-
-    pid_t m_joypad_shmem_fd;
-    bool m_is_shmem_opened;
 
     std::uint8_t * m_data;
 
     int m_current_servo_l = 1;
     int m_current_servo_r = 0;
 
-    std::unique_ptr<ShmemWrapper::ShmemHandler<std::uint8_t>> m_shmem_handler;
+    std::unique_ptr<shmem_wrapper::ShmemHandler<std::uint8_t>> m_shmem_handler;
 
-    static constexpr const char * SHMEM_NAME = "controller_shmem_";
+    // TODO: move those kind of values to some config file
     static constexpr int CONTROL_DATA_BINS = 7;
 private:
-    bool readJoypadManagerPid();
-    bool openJoypadShmem();
     void praseJoypadData();
 };
 

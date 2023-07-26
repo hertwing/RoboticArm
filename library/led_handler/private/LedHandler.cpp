@@ -1,5 +1,6 @@
 #include "tanos/led_handler/DataTypes.h"
 #include "tanos/led_handler/LedHandler.h"
+#include "tanos/shmem_wrapper/DataTypes.h"
 
 LedHandler::LedHandler()
 {
@@ -28,6 +29,8 @@ LedHandler::LedHandler()
     };
     ws2811_init(&m_ledstring);
     turnAllLedsOff();
+    m_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<LedState>>(
+        shmem_wrapper::DataTypes::, CONTROL_DATA_BINS, std::to_string(getpid()).c_str(), true, shmem_wrapper::DataTypes::JOYPAD_SEM_NAME);
 }
 
 void LedHandler::turnAllLedsOff()
