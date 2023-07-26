@@ -1,21 +1,25 @@
-#include "tanos/led_handler/DataTypes.h"
-#include "tanos/led_handler/LedHandler.h"
-#include "tanos/shmem_wrapper/DataTypes.h"
+#include "odin/led_handler/DataTypes.h"
+#include "odin/led_handler/LedHandler.h"
+#include "odin/shmem_wrapper/DataTypes.h"
+
+#include <iostream>
+#include <chrono>
+#include <thread>
 
 LedHandler::LedHandler()
 {
     m_ledstring =
     {
-        .freq = TARGET_FREQ,
-        .dmanum = DMA,
+        .freq = led_handler::TARGET_FREQ,
+        .dmanum = led_handler::DMA,
         .channel =
         {
             [0] =
             {
-                .gpionum = GPIO_PIN,
+                .gpionum = led_handler::GPIO_PIN,
                 .invert = 0,
-                .count = LED_COUNT,
-                .strip_type = STRIP_TYPE,
+                .count = led_handler::LED_COUNT,
+                .strip_type = led_handler::STRIP_TYPE,
                 .brightness = 255,
             },
             [1] =
@@ -29,24 +33,25 @@ LedHandler::LedHandler()
     };
     ws2811_init(&m_ledstring);
     turnAllLedsOff();
-    m_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<LedState>>(
-        shmem_wrapper::DataTypes::, CONTROL_DATA_BINS, std::to_string(getpid()).c_str(), true, shmem_wrapper::DataTypes::JOYPAD_SEM_NAME);
+    m_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<ws2811_led_t>>(
+        shmem_wrapper::DataTypes::LED_SHMEM_NAME, led_handler::LED_COUNT, std::to_string(getpid()).c_str(), true, shmem_wrapper::DataTypes::LED_SEM_NAME, true);
+    m_is_color_changed = false;
 }
 
 void LedHandler::turnAllLedsOff()
 {
-    for (int i = 0; i < LED_COUNT; ++i)
+    for (int i = 0; i < led_handler::LED_COUNT; ++i)
     {
-        m_ledstring.channel[0].leds[i] = LED_COLOR_NONE;
+        m_ledstring.channel[0].leds[i] = led_handler::LED_COLOR_NONE;
     }
     ws2811_render(&m_ledstring);
 }
 
 void LedHandler::setColorToOne(std::uint8_t led_num, ws2811_led_t color)
 {
-    for (int i = 0; i < LED_COUNT; ++i)
+    for (int i = 0; i < led_handler::LED_COUNT; ++i)
     {
-        m_ledstring.channel[0].leds[i] = LED_COLOR_NONE;
+        m_ledstring.channel[0].leds[i] = led_handler::LED_COLOR_NONE;
     }
     m_ledstring.channel[0].leds[led_num] = color;
     ws2811_render(&m_ledstring);
@@ -54,20 +59,60 @@ void LedHandler::setColorToOne(std::uint8_t led_num, ws2811_led_t color)
 
 void LedHandler::setColorToAll(ws2811_led_t color)
 {
-    for (int i = 0; i < LED_COUNT; ++i)
+    for (int i = 0; i < led_handler::LED_COUNT; ++i)
     {
         m_ledstring.channel[0].leds[i] = color;
     }
     ws2811_render(&m_ledstring);
 }
 
-void LedHandler::setJoypadSelectionColor(std::uint8_t left_analog_servo_num, std::uint8_t right_analog_servo_num)
+void LedHandler::updateLedColors()
 {
-    for (int i = 0; i < LED_COUNT; ++i)
+    if (m_shmem_handler->openShmem())
     {
-        m_ledstring.channel[0].leds[i] = LED_COLOR_NONE;
+        if (m_shmem_handler->shmemRead(m_led_color_status))
+        {
+            // Check if colors changed
+
+            std::cout << "Updating Led colors" << std::endl;
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                if (m_ledstring.channel[0].leds[i] != m_led_color_status[i])
+                {
+                    m_is_color_changed = true;
+                }
+            }
+            if (m_is_color_changed)
+            {
+
+                std::cout << "Color changed" << std::endl;
+                for (int i = 0; i < led_handler::LED_COUNT; ++i)
+                {
+                    m_ledstring.channel[0].leds[i] = m_led_color_status[i];
+                }
+                ws2811_render(&m_ledstring);
+            }
+            m_is_color_changed = false;
+        }
+        else
+        {
+            std::cout << "Couldn't read from shmem." << std::endl;
+        }
     }
-    m_ledstring.channel[0].leds[left_analog_servo_num] = LED_COLOR_BLUE;
-    m_ledstring.channel[0].leds[right_analog_servo_num] = LED_COLOR_GREEN;
-    ws2811_render(&m_ledstring);
+    else 
+    {
+        std::cout << "Couldn't open shmem." << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
 }
+// void LedHandler::setJoypadSelectionColor(std::uint8_t left_analog_servo_num, std::uint8_t right_analog_servo_num)
+// {
+//     for (int i = 0; i < led_handler::LED_COUNT; ++i)
+//     {
+//         m_ledstring.channel[0].leds[i] = led_handler::LED_COLOR_NONE;
+//     }
+//     m_ledstring.channel[0].leds[left_analog_servo_num] = led_handler::LED_COLOR_BLUE;
+//     m_ledstring.channel[0].leds[right_analog_servo_num] = led_handler::LED_COLOR_GREEN;
+//     ws2811_render(&m_ledstring);
+// }
+

@@ -1,8 +1,8 @@
 project(led_library)
 
 set(HEADERS
-    public/tanos/led_handler/LedHandler.h
-    public/tanos/led_handler/DataTypes.h
+    public/odin/led_handler/LedHandler.h
+    public/odin/led_handler/DataTypes.h
     )
 
 set(SOURCES
@@ -15,6 +15,7 @@ add_library(${PROJECT_NAME}
     )
 
 target_link_libraries(${PROJECT_NAME}
+    PUBLIC library_shmem_handler
     PUBLIC ws2811
     )
 

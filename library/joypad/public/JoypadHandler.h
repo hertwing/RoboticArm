@@ -2,7 +2,7 @@
 #define JOYPADHANDLER_H
 
 #include "JoypadData.h"
-#include "tanos/shmem_wrapper/ShmemHandler.hpp"
+#include "odin/shmem_wrapper/ShmemHandler.hpp"
 #include <memory>
 
 class JoypadHandler
@@ -17,10 +17,11 @@ public:
     // void setProcessStatus(const bool);
 
 public:
+    // TODO: move this to config file
     static constexpr int GENESYS_BYTES_NUM = 27;
     static constexpr int BUFF_SIZE = GENESYS_BYTES_NUM + 1;
     static constexpr int CONTROL_BYTES = 19;
-    static constexpr int CONTROL_DATA_BINS = 7;
+    static constexpr int JOYPAD_CONTROL_DATA_BINS = 7;
     static constexpr const char * HIDRAW_PATH = "/dev/hidraw";
     static void signalCallbackHandler(int signum);
 

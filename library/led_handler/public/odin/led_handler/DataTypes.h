@@ -4,6 +4,8 @@
 #include <ws2811.h>
 #include <cstdint>
 
+namespace led_handler {
+
 static constexpr std::uint32_t TARGET_FREQ = 800000; // WS2812B LED STRIP COMMUNICATION FREQ IN HZ
 static constexpr std::uint8_t GPIO_PIN = 18; // PWM PIN ON RPI BOARD TO DRIVE LED STRIP
 static constexpr std::uint8_t DMA = 5;
@@ -20,14 +22,25 @@ static constexpr ws2811_led_t LED_COLOR_BLUE = 0x00000020;
 static constexpr ws2811_led_t LED_COLOR_PURPLE = 0x00100010;
 static constexpr ws2811_led_t LED_COLOR_PINK = 0x00200010;
 
-struct LedState
-{
-    ws2811_led_t BASE_ROTOR_LED;
-    ws2811_led_t JOINT_ONE_LED;
-    ws2811_led_t JOINT_TWO_LED;
-    ws2811_led_t JOINT_THREE_LED;
-    ws2811_led_t GRIPPER_BASE_LED;
-    ws2811_led_t GRIPPER_LED;
+enum JointLed {
+    BASE_ROTOR_LED,
+    JOINT_ONE_LED,
+    JOINT_TWO_LED,
+    JOINT_THREE_LED,
+    GRIPPER_BASE_LED,
+    GRIPPER_LED,
 };
+
+// ws2811_led_t LedState[LED_COUNT] = 
+// {
+//     LED_COLOR_NONE,
+//     LED_COLOR_NONE,
+//     LED_COLOR_NONE,
+//     LED_COLOR_NONE,
+//     LED_COLOR_NONE,
+//     LED_COLOR_NONE
+// };
+
+} // led_handler
 
 #endif // LEDHANDLERDATATYPES_H

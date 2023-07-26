@@ -33,7 +33,7 @@ public:
 
 private:
     bool m_use_semaphores;
-    bool m_is_reader;
+    bool m_is_owner;
     bool m_is_shmem_opened;
 
     std::string m_shmem_name;
@@ -55,32 +55,37 @@ private:
 };
 
 template <typename T>
-ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_bins, const char * pid, bool use_semaphores, const char * sem_name, bool is_reader) :
+ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_bins, const char * pid, bool use_semaphores, const char * sem_name, bool is_owner) :
     m_shmem_data_bins(data_bins),
     m_identifier_num(pid),
     m_sem_name(sem_name),
     m_use_semaphores(use_semaphores),
-    m_is_reader(is_reader)
+    m_is_owner(is_owner)
 {
-    if (m_is_reader)
-    {
-        m_is_shmem_opened = false;
-    }
-
     m_shmem_name = static_cast<std::string>(shmem_name);
+    std::cout << "shmem name: " << m_shmem_name << std::endl;
     m_shmem_name_with_id = m_shmem_name + m_identifier_num;
+    std::cout << "shmem name: " << m_shmem_name_with_id << std::endl;
 
     m_writer_sem_name = static_cast<std::string>(m_sem_name) + "_writer_" + m_identifier_num;
     m_reader_sem_name = static_cast<std::string>(m_sem_name) + "_reader_" + m_identifier_num;
 
     m_shmem_identifier_path = static_cast<std::string>(shmem_wrapper::DataTypes::SHMEM_IDENTIFIER_PATH) + m_shmem_name + shmem_wrapper::DataTypes::SHMEM_IDENTIFIER_NAME;
+    std::cout << "shmem path: " << m_shmem_identifier_path << std::endl;
+
+    if (!m_is_owner)
+    {
+        m_is_shmem_opened = false;
+    } else {
+        createShmem();
+    }
 }
 
 template <typename T>
 ShmemHandler<T>::~ShmemHandler()
 {
     // Close shmem fd only if writer process is closing
-    if (!m_is_reader)
+    if (m_is_owner)
     {
         std::cout << "Closing shmem." << std::endl;
         munmap(m_data, m_shmem_data_bins);

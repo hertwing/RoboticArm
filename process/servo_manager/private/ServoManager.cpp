@@ -1,6 +1,6 @@
 #include "ServoManager.h"
-#include "tanos/shmem_wrapper/DataTypes.h"
-#include "tanos/led_handler/DataTypes.h"
+#include "odin/shmem_wrapper/DataTypes.h"
+#include "odin/led_handler/DataTypes.h"
 
 #include <chrono>
 #include <fstream>
@@ -18,18 +18,24 @@ bool ServoManager::m_run_process = true;
 ServoManager::ServoManager() :
     m_servo_controller()
 {
-    m_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<std::uint8_t>>(
-        shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, CONTROL_DATA_BINS, "", true, shmem_wrapper::DataTypes::JOYPAD_SEM_NAME, true);
-    m_led_handler.setJoypadSelectionColor(m_current_servo_l, m_current_servo_r);
+    m_joypad_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<std::uint8_t>>(
+        shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, JOYPAD_CONTROL_DATA_BINS, "", true, shmem_wrapper::DataTypes::JOYPAD_SEM_NAME, false);
+    m_led_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<ws2811_led_t>>(
+        shmem_wrapper::DataTypes::LED_SHMEM_NAME, led_handler::LED_COUNT, "", true, shmem_wrapper::DataTypes::LED_SEM_NAME, false);
+
+    for (int i = 0; i < led_handler::LED_COUNT; ++i)
+    {
+        m_led_color_status[i] = led_handler::LED_COLOR_NONE;
+    }
 }
 
 void ServoManager::servoDataReader()
 {
     while (m_run_process)
     {
-        if (m_shmem_handler->openShmem())
+        if (m_joypad_shmem_handler->openShmem())
         {
-            if (m_shmem_handler->shmemRead(m_joypad_data.data))
+            if (m_joypad_shmem_handler->shmemRead(m_joypad_data.data))
             {
                 praseJoypadData();
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -39,12 +45,17 @@ void ServoManager::servoDataReader()
                 std::cout << "Couldn't read from shmem." << std::endl;
             }
         }
+        else
+        {
+            std::cout << "Couldn't open shmem." << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
     }
 }
 
 void ServoManager::praseJoypadData()
 {
-    for (int i = 0; i < JoypadHandler::CONTROL_DATA_BINS; ++i)
+    for (int i = 0; i < JoypadHandler::JOYPAD_CONTROL_DATA_BINS; ++i)
     {
         if (m_joypad_data_previous.data[i] != m_joypad_data.data[i])
         {
@@ -60,7 +71,7 @@ void ServoManager::praseJoypadData()
         {
             ++m_current_servo_l;
         }
-        m_led_handler.setJoypadSelectionColor(m_current_servo_l, m_current_servo_r);
+        updateLedColors();
     }
     if (m_joypad_data_types.leftBumper && m_joypad_data_previous.data[0] != 4)
     {
@@ -69,7 +80,7 @@ void ServoManager::praseJoypadData()
         {
             --m_current_servo_l;
         }
-        m_led_handler.setJoypadSelectionColor(m_current_servo_l, m_current_servo_r);
+        updateLedColors();
     }
 
     if (m_joypad_data_types.leftStickX < 125)
@@ -89,10 +100,17 @@ void ServoManager::praseJoypadData()
         m_servo_controller.moveRight(0, 255 - m_joypad_data_types.rightStickX);
     }
 
-    for (int i = 0; i < JoypadHandler::CONTROL_DATA_BINS; ++i)
+    for (int i = 0; i < JoypadHandler::JOYPAD_CONTROL_DATA_BINS; ++i)
     {
         m_joypad_data_previous.data[i] = m_joypad_data.data[i];
     }
+}
+
+void ServoManager::updateLedColors()
+{
+    m_led_color_status[m_current_servo_l] = led_handler::LED_COLOR_BLUE;
+    m_led_color_status[m_current_servo_r] = led_handler::LED_COLOR_GREEN;
+    m_led_shmem_handler->shmemWrite(m_led_color_status);
 }
 
 void ServoManager::runProcess()
