@@ -128,10 +128,7 @@ void ServoManager::updateLedColors()
     }
     m_led_color_status[m_current_servo_l] = led_handler::LED_COLOR_BLUE;
     m_led_color_status[m_current_servo_r] = led_handler::LED_COLOR_GREEN;
-    for (int i = 0; i < led_handler::LED_COUNT; ++i)
-    {
-        std::cout << m_led_color_status[i] << std::endl;
-    }
+
     m_led_shmem_handler->shmemWrite(m_led_color_status);
 }
 
