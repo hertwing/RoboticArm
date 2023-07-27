@@ -86,7 +86,7 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_size, bool is_ow
 template <typename T>
 ShmemHandler<T>::~ShmemHandler()
 {
-    // Close shmem fd only if writer process is closing
+    // Close shmem fd only if owner process is closing
     if (m_is_owner)
     {
         std::cout << "Closing shmem." << std::endl;
@@ -100,7 +100,7 @@ template <typename T>
 bool ShmemHandler<T>::createShmem()
 {
     std::cout << "Creating shmem fd: " << m_shmem_name_with_id << std::endl;
-    m_shmem_fd = shm_open(m_shmem_name_with_id.c_str(), O_CREAT | O_EXCL | O_RDWR, 0666);
+    m_shmem_fd = shm_open(m_shmem_name_with_id.c_str(), O_CREAT | O_EXCL | O_RDWR, 0660);
 
     if (m_shmem_fd < 0)
     {
@@ -224,7 +224,7 @@ bool ShmemHandler<T>::shmemWrite(const T * data)
     }
     if (sem_post(m_writer_sem) == -1)
     {
-        std::cout << "sem_post post for writer semaphore failed." << std::endl;
+        std::cout << "sem_post for writer semaphore failed." << std::endl;
         return 0;
     }
     return 1;
@@ -240,7 +240,7 @@ bool ShmemHandler<T>::shmemRead(T * data)
     }
     if (sem_post(m_writer_sem) == -1)
     {
-        std::cout << "sem_post post for writer semaphore failed." << std::endl;
+        std::cout << "sem_post for writer semaphore failed." << std::endl;
         return 0;
     }
     for (int i = 0; i < m_shmem_data_size; ++i)
@@ -254,7 +254,7 @@ bool ShmemHandler<T>::shmemRead(T * data)
     }
     if (sem_post(m_reader_sem) == -1)
     {
-        std::cout << "sem_post post for reader failed." << std::endl;
+        std::cout << "sem_post for reader semaphore failed." << std::endl;
         return 0;
     }
     return 1;
@@ -278,7 +278,7 @@ bool ShmemHandler<T>::readShmemId()
             m_is_shmem_opened = false;
             std::cout << "Reading shmem owner process PID." << std::endl;
             m_identifier_num = obtained_pid;
-            std::cout << "Obtained pid: " << m_identifier_num << std::endl;
+            std::cout << "Obtained PID: " << m_identifier_num << std::endl;
             m_writer_sem_name = m_writer_sem_name = m_writer_sem_prefix + m_shmem_name + m_identifier_num;
             m_reader_sem_name = m_reader_sem_name = m_reader_sem_prefix + m_shmem_name + m_identifier_num;
             m_shmem_name_with_id = m_shmem_name + m_identifier_num;
