@@ -8,10 +8,8 @@ struct DataTypes {
     static constexpr const char * SHMEM_IDENTIFIER_NAME = "_shmem_identifier.txt";
 
     static constexpr const char * JOYPAD_SHMEM_NAME = "ControllerShmem";
-    static constexpr const char * JOYPAD_SEM_NAME = "JoypadSem";
 
     static constexpr const char * LED_SHMEM_NAME = "LedShmem";
-    static constexpr const char * LED_SEM_NAME = "LedSem";
 };
 
 } // shmem_wrapper

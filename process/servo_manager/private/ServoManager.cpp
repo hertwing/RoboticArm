@@ -19,17 +19,20 @@ ServoManager::ServoManager() :
     m_servo_controller()
 {
     m_joypad_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<std::uint8_t>>(
-        shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, JOYPAD_CONTROL_DATA_BINS, "", true, shmem_wrapper::DataTypes::JOYPAD_SEM_NAME, false);
+        shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, JOYPAD_CONTROL_DATA_BINS, false);
     m_led_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<ws2811_led_t>>(
-        shmem_wrapper::DataTypes::LED_SHMEM_NAME, led_handler::LED_COUNT, std::to_string(getpid()).c_str(), true, shmem_wrapper::DataTypes::LED_SEM_NAME, true);
-    updateLedColors();
+        shmem_wrapper::DataTypes::LED_SHMEM_NAME, led_handler::LED_COUNT, false);
+    if (m_led_shmem_handler->openShmem())
+    {
+        updateLedColors();
+    }
 }
 
 void ServoManager::servoDataReader()
 {
     while (m_run_process)
     {
-        if (m_joypad_shmem_handler->openShmem())
+        if (m_joypad_shmem_handler->openShmem() && m_led_shmem_handler->openShmem())
         {
             if (m_joypad_shmem_handler->shmemRead(m_joypad_data.data))
             {
@@ -81,11 +84,26 @@ void ServoManager::praseJoypadData()
 
     if (m_joypad_data_types.leftStickX < 125)
     {
-        m_servo_controller.moveLeft(m_current_servo_l, m_joypad_data_types.leftStickX);
+        // TODO: Save servo numbers to config file
+        if (m_current_servo_l == 5)
+        {
+            m_servo_controller.moveRight(m_current_servo_l, 255 - m_joypad_data_types.leftStickX);
+        }
+        else
+        {
+            m_servo_controller.moveLeft(m_current_servo_l, m_joypad_data_types.leftStickX);
+        }
     } 
     else if (m_joypad_data_types.leftStickX > 129)
     {
-        m_servo_controller.moveRight(m_current_servo_l, 255 - m_joypad_data_types.leftStickX);
+        if (m_current_servo_l == 5)
+        {
+            m_servo_controller.moveLeft(m_current_servo_l, m_joypad_data_types.leftStickX);
+        }
+        else
+        {
+            m_servo_controller.moveRight(m_current_servo_l, 255 - m_joypad_data_types.leftStickX);
+        }
     }
     if (m_joypad_data_types.rightStickX < 125)
     {
@@ -110,6 +128,10 @@ void ServoManager::updateLedColors()
     }
     m_led_color_status[m_current_servo_l] = led_handler::LED_COLOR_BLUE;
     m_led_color_status[m_current_servo_r] = led_handler::LED_COLOR_GREEN;
+    for (int i = 0; i < led_handler::LED_COUNT; ++i)
+    {
+        std::cout << m_led_color_status[i] << std::endl;
+    }
     m_led_shmem_handler->shmemWrite(m_led_color_status);
 }
 
