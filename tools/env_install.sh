@@ -50,7 +50,7 @@ git pull origin
 export CC=/opt/cross-pi-gcc-10.2.0-64/bin/aarch64-linux-gnu-gcc
 export CXX=/opt/cross-pi-gcc-10.2.0-64/bin/aarch64-linux-gnu-g++
 
-mkdir build; cd build; cmake -D BUILD_SHARED=OFF -D BUILD_TEST=ON ..; make -j4; make install; cd ..;
+mkdir build; cd build; cmake -D BUILD_SHARED=OFF -D BUILD_TEST=ON ..; make -j4; cd ..;
 
 cp ./build/libws2811.a /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/
 mkdir /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/pkgconfig
@@ -66,13 +66,6 @@ cp gpio.h /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/include/ws2811/
 cp mailbox.h /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/include/ws2811/
 cp pcm.h /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/include/ws2811/
 cd ..
-
-# pigpio
-# ssh $rpi_username@$rpi_ip sudo apt-get install pigpio
-# scp $rpi_username@$rpi_ip:/usr/lib/libpigpio.so.1 /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/
-# ln -s /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/libpigpio.so.1 /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/libpigpio.so
-
-# scp $rpi_username@$rpi_ip:/usr/include/pigpio.h /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/include/
 
 # Libs
 # sudo apt-get install libpthread-stubs0-dev
@@ -90,7 +83,7 @@ git pull origin
 export CC=/opt/cross-pi-gcc-10.2.0-64/bin/aarch64-linux-gnu-gcc
 export CXX=/opt/cross-pi-gcc-10.2.0-64/bin/aarch64-linux-gnu-g++
 
-cd wiringPi; make -j4; make install; cd ..;
+cd wiringPi; make -j4; cd ..;
 cp ./wiringPi/libwiringPi.so.2.70 /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/
 ln -s /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/libwiringPi.so.2.70 /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/libwiringPi.so
 
@@ -98,7 +91,8 @@ ln -s /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/libwiringPi.so.
 
 cp ./wiringPi/*.h /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/include/
 
-cd devLib; make -j4; make install; cd ..;
+cd devLib; make -j4; cd ..;
 cp ./devLib/libwiringPiDev.so.2.70 /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/
 ln -s /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/libwiringPiDev.so.2.70 /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/libwiringPiDev.so
 cd ..
+
