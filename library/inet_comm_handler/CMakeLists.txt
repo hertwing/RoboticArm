@@ -1,5 +1,9 @@
 project(inet_comm_handler)
 
+if (BUILD_ARM)
+    include($ENV{ROBOTICARM_TOOLCHAIN_ROOT}/rpi_toolchain.cmake)
+endif (BUILD_ARM)
+
 set(HEADERS
     public/InetCommData.h
     public/InetCommHandler.h

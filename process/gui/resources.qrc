@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/icons">
+        <file>resources/joypad.png</file>
+        <file>resources/magnifying_glass.png</file>
+        <file>resources/power_off.png</file>
+        <file>resources/power_off_white.png</file>
+        <file>resources/rpi_icon.png</file>
+    </qresource>
+</RCC>

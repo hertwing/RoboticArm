@@ -1,5 +1,9 @@
 project(joypad_manager)
 
+if (BUILD_ARM)
+    include($ENV{ROBOTICARM_TOOLCHAIN_ROOT}/rpi_toolchain.cmake)
+endif (BUILD_ARM)
+
 add_executable(${PROJECT_NAME}
     main.cpp
     private/JoypadManager.cpp
