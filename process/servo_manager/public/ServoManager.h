@@ -38,7 +38,7 @@ private:
     int m_current_servo_l = 1;
     int m_current_servo_r = 0;
 
-    std::unique_ptr<shmem_wrapper::ShmemHandler<std::uint8_t>> m_joypad_shmem_handler;
+    std::unique_ptr<shmem_wrapper::ShmemHandler<JoypadData>> m_joypad_shmem_handler;
     std::unique_ptr<shmem_wrapper::ShmemHandler<ws2811_led_t>> m_led_shmem_handler;
 
     // TODO: move those kind of values to some config file

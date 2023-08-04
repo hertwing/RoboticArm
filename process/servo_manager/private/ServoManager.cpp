@@ -18,10 +18,10 @@ bool ServoManager::m_run_process = true;
 ServoManager::ServoManager() :
     m_servo_controller()
 {
-    m_joypad_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<std::uint8_t>>(
-        shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, JOYPAD_CONTROL_DATA_BINS, false);
+    m_joypad_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<JoypadData>>(
+        shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, sizeof(JoypadData), false);
     m_led_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<ws2811_led_t>>(
-        shmem_wrapper::DataTypes::LED_SHMEM_NAME, led_handler::LED_COUNT, false);
+        shmem_wrapper::DataTypes::LED_SHMEM_NAME, sizeof(m_led_color_status), false);
     if (m_led_shmem_handler->openShmem())
     {
         updateLedColors();
@@ -34,7 +34,7 @@ void ServoManager::servoDataReader()
     {
         if (m_joypad_shmem_handler->openShmem() && m_led_shmem_handler->openShmem())
         {
-            if (m_joypad_shmem_handler->shmemRead(m_joypad_data.data))
+            if (m_joypad_shmem_handler->shmemRead(&m_joypad_data))
             {
                 praseJoypadData();
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));

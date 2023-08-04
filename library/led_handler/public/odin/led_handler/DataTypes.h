@@ -31,16 +31,6 @@ enum JointLed {
     GRIPPER_LED,
 };
 
-// ws2811_led_t LedState[LED_COUNT] = 
-// {
-//     LED_COLOR_NONE,
-//     LED_COLOR_NONE,
-//     LED_COLOR_NONE,
-//     LED_COLOR_NONE,
-//     LED_COLOR_NONE,
-//     LED_COLOR_NONE
-// };
-
 } // led_handler
 
 #endif // LEDHANDLERDATATYPES_H

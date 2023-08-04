@@ -4,6 +4,7 @@
 #include "DataTypes.h"
 #include <semaphore.h>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -213,10 +214,20 @@ bool ShmemHandler<T>::shmemWrite(const T * data)
         std::cout << "sem_post post for reader semaphore failed." << std::endl;
         return 0;
     }
-    for (int i = 0; i < m_shmem_data_size; ++i)
-    {
-        m_data[i] = data[i];
-    }
+    // memcpy(frame, &test1, sizeof(frame));
+    std::memcpy(m_data, data, m_shmem_data_size);
+    // for (int i = 0; i < m_shmem_data_size; ++i)
+    // {
+    //     std::cout << data->data[i] << std::endl;
+    //     std::cout << m_data->data[i] << std::endl;
+    // }
+
+    // std::this_thread::sleep_for(std::chrono::seconds(10));
+    
+    // for (int i = 0; i < m_shmem_data_size; ++i)
+    // {
+    //     m_data[i] = data[i];
+    // }
     if (sem_wait(m_reader_sem) == -1)
     {
         std::cout << "sem_wait for reader semaphore failed." << std::endl;
@@ -243,10 +254,18 @@ bool ShmemHandler<T>::shmemRead(T * data)
         std::cout << "sem_post for writer semaphore failed." << std::endl;
         return 0;
     }
-    for (int i = 0; i < m_shmem_data_size; ++i)
-    {
-        data[i] = m_data[i];
-    }
+
+    std::memcpy(data, m_data, m_shmem_data_size);
+    // for (int i = 0; i < m_shmem_data_size; ++i)
+    // {
+    //     std::cout << data->data[i] << std::endl;
+    //     std::cout << m_data->data[i] << std::endl;
+    // }
+    // std::this_thread::sleep_for(std::chrono::seconds(10));
+    // for (int i = 0; i < m_shmem_data_size; ++i)
+    // {
+    //     data[i] = m_data[i];
+    // }
     if (sem_wait(m_writer_sem) == -1)
     {
         std::cout << "sem_wait for writer semaphore failed." << std::endl;

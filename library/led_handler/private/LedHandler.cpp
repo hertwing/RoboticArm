@@ -34,7 +34,7 @@ LedHandler::LedHandler()
     ws2811_init(&m_ledstring);
     turnAllLedsOff();
     m_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<ws2811_led_t>>(
-        shmem_wrapper::DataTypes::LED_SHMEM_NAME, led_handler::LED_COUNT, true);
+        shmem_wrapper::DataTypes::LED_SHMEM_NAME, sizeof(m_led_color_status), true);
 
     // Fill leds shmem with none values
     for (int i = 0; i < led_handler::LED_COUNT; ++i)
