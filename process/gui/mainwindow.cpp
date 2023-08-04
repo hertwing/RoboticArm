@@ -1,6 +1,8 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 
+#include <iostream>
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
     ui(new Ui::MainWindow),
@@ -8,6 +10,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_diagnostic_enabled(false),
     m_diagnostic_board_selected(BoardSelect::GUI)
 {
+    m_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<DiagnosticData>>(
+        shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), false);
     ui->setupUi(this);
     draw_menu();
 }
@@ -72,6 +76,24 @@ void MainWindow::show_diagnostics()
 {
     ui->widget_diagnostic->show();
     ui->button_diagnostic->setStyleSheet(m_enabled_diagnostic_style_sheet);
+    while(m_diagnostic_enabled)
+    {
+        if (m_shmem_handler->openShmem())
+        {
+            m_shmem_handler->shmemRead(&m_gui_diagnostic_data);
+        }
+        else
+        {
+            m_gui_diagnostic_data.cpu_usage = 0;
+            m_gui_diagnostic_data.cpu_temp = 0;
+            m_gui_diagnostic_data.ram_usage = 0;
+            m_gui_diagnostic_data.latency = 0;
+        }
+        std::cout << m_gui_diagnostic_data.cpu_usage << "%" << std::endl;
+        std::cout << m_gui_diagnostic_data.cpu_temp << "\370C" << std::endl;
+        std::cout << m_gui_diagnostic_data.ram_usage << "%" << std::endl;
+        std::cout << m_gui_diagnostic_data.latency << "%" << std::endl;
+    }
 }
 
 void MainWindow::hide_diagnostics()

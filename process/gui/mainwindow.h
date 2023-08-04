@@ -1,7 +1,14 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "odin/diagnostic_handler/DataTypes.h"
+#include "odin/shmem_wrapper/ShmemHandler.hpp"
+#include "odin/shmem_wrapper/DataTypes.h"
+
 #include <QMainWindow>
+#include <memory>
+
+using namespace odin::diagnostic_handler;
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -36,11 +43,14 @@ private:
     void hide_diagnostics();
 
 private:
-    Ui::MainWindow *ui;
+    Ui::MainWindow * ui;
     bool m_joypad_enabled;
     bool m_diagnostic_enabled;
     bool m_diagnostic_board_selected;
 
+    std::unique_ptr<shmem_wrapper::ShmemHandler<DiagnosticData>> m_shmem_handler;
+    DiagnosticData m_gui_diagnostic_data;
+    DiagnosticData m_rak_diagnostic_data;
 private:
     const QString m_button_rpi_switch_gui_style_sheet =
         "padding: 1; \

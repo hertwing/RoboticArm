@@ -3,7 +3,7 @@
 #include <chrono>
 #include <thread>
 #include <iostream>
-#include<signal.h>
+#include <signal.h>
 
 bool JoypadManager::m_run_process = true;
 
