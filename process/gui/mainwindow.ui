@@ -2,6 +2,14 @@
 <ui version="4.0">
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>460</height>
+   </rect>
+  </property>
   <property name="minimumSize">
    <size>
     <width>800</width>
@@ -108,7 +116,21 @@
                    </widget>
                   </item>
                   <item>
-                   <widget class="QWidget" name="widget_cpu_temp_chart" native="true"/>
+                   <widget class="QWidget" name="widget_cpu_temp_chart" native="true">
+                    <widget class="QLabel" name="label_cpu_temp_val">
+                     <property name="geometry">
+                      <rect>
+                       <x>130</x>
+                       <y>80</y>
+                       <width>67</width>
+                       <height>17</height>
+                      </rect>
+                     </property>
+                     <property name="text">
+                      <string>0</string>
+                     </property>
+                    </widget>
+                   </widget>
                   </item>
                  </layout>
                 </widget>
@@ -171,7 +193,21 @@
                    </widget>
                   </item>
                   <item>
-                   <widget class="QWidget" name="widget_cpu_usage_chart" native="true"/>
+                   <widget class="QWidget" name="widget_cpu_usage_chart" native="true">
+                    <widget class="QLabel" name="label_cpu_usage_val">
+                     <property name="geometry">
+                      <rect>
+                       <x>130</x>
+                       <y>80</y>
+                       <width>67</width>
+                       <height>17</height>
+                      </rect>
+                     </property>
+                     <property name="text">
+                      <string>0</string>
+                     </property>
+                    </widget>
+                   </widget>
                   </item>
                  </layout>
                 </widget>
@@ -215,7 +251,21 @@
                    </widget>
                   </item>
                   <item>
-                   <widget class="QWidget" name="widget_latency_chart" native="true"/>
+                   <widget class="QWidget" name="widget_latency_chart" native="true">
+                    <widget class="QLabel" name="label_latency_val">
+                     <property name="geometry">
+                      <rect>
+                       <x>130</x>
+                       <y>80</y>
+                       <width>67</width>
+                       <height>17</height>
+                      </rect>
+                     </property>
+                     <property name="text">
+                      <string>0</string>
+                     </property>
+                    </widget>
+                   </widget>
                   </item>
                  </layout>
                 </widget>
@@ -259,7 +309,21 @@
                    </widget>
                   </item>
                   <item>
-                   <widget class="QWidget" name="widget_ram_usage_chart" native="true"/>
+                   <widget class="QWidget" name="widget_ram_usage_chart" native="true">
+                    <widget class="QLabel" name="label_ram_usage_val">
+                     <property name="geometry">
+                      <rect>
+                       <x>130</x>
+                       <y>70</y>
+                       <width>67</width>
+                       <height>17</height>
+                      </rect>
+                     </property>
+                     <property name="text">
+                      <string>0</string>
+                     </property>
+                    </widget>
+                   </widget>
                   </item>
                  </layout>
                 </widget>

@@ -2,6 +2,9 @@
 #include "./ui_mainwindow.h"
 
 #include <iostream>
+#include <string>
+#include <QTimer>
+#include <QChar>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -18,6 +21,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    delete m_diagnostic_timer;
     delete ui;
 }
 
@@ -76,28 +80,34 @@ void MainWindow::show_diagnostics()
 {
     ui->widget_diagnostic->show();
     ui->button_diagnostic->setStyleSheet(m_enabled_diagnostic_style_sheet);
-    while(m_diagnostic_enabled)
+
+    m_diagnostic_timer = new QTimer(this);
+    m_diagnostic_timer->start(250);
+    connect(m_diagnostic_timer, SIGNAL(timeout()), this, SLOT(diagnosticTimerSlot()));
+}
+
+void MainWindow::diagnosticTimerSlot()
+{
+    if (m_shmem_handler->openShmem())
     {
-        if (m_shmem_handler->openShmem())
-        {
-            m_shmem_handler->shmemRead(&m_gui_diagnostic_data);
-        }
-        else
-        {
-            m_gui_diagnostic_data.cpu_usage = 0;
-            m_gui_diagnostic_data.cpu_temp = 0;
-            m_gui_diagnostic_data.ram_usage = 0;
-            m_gui_diagnostic_data.latency = 0;
-        }
-        std::cout << m_gui_diagnostic_data.cpu_usage << "%" << std::endl;
-        std::cout << m_gui_diagnostic_data.cpu_temp << "\370C" << std::endl;
-        std::cout << m_gui_diagnostic_data.ram_usage << "%" << std::endl;
-        std::cout << m_gui_diagnostic_data.latency << "%" << std::endl;
+        m_shmem_handler->shmemRead(&m_gui_diagnostic_data);
     }
+    else
+    {
+        m_gui_diagnostic_data.cpu_usage = 0;
+        m_gui_diagnostic_data.cpu_temp = 0;
+        m_gui_diagnostic_data.ram_usage = 0;
+        m_gui_diagnostic_data.latency = 0;
+    }
+    ui->label_cpu_usage_val->setText(QString::fromStdString(std::to_string(m_gui_diagnostic_data.cpu_usage) + "%"));
+    ui->label_ram_usage_val->setText(QString::fromStdString(std::to_string(m_gui_diagnostic_data.ram_usage) + "%"));
+    ui->label_cpu_temp_val->setText(QString::fromStdString(std::to_string(m_gui_diagnostic_data.cpu_temp) + "°C"));
+    ui->label_latency_val->setText(QString::fromStdString(std::to_string(m_gui_diagnostic_data.latency) + "ms"));
 }
 
 void MainWindow::hide_diagnostics()
 {
+    delete m_diagnostic_timer;
     ui->widget_diagnostic->hide();
     ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
 }

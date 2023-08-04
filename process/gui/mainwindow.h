@@ -36,6 +36,8 @@ private slots:
 
     void on_button_rpi_switch_clicked();
 
+    void diagnosticTimerSlot();
+
 private:
     void draw_menu();
     void disable_buttons();
@@ -51,6 +53,8 @@ private:
     std::unique_ptr<shmem_wrapper::ShmemHandler<DiagnosticData>> m_shmem_handler;
     DiagnosticData m_gui_diagnostic_data;
     DiagnosticData m_rak_diagnostic_data;
+
+    QTimer * m_diagnostic_timer;
 private:
     const QString m_button_rpi_switch_gui_style_sheet =
         "padding: 1; \
