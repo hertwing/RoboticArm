@@ -2,9 +2,9 @@
 add_subdirectory(joypad)
 add_subdirectory(shmem_handler)
 add_subdirectory(inet_comm_handler)
+add_subdirectory(diagnostic_handler)
 
 if (BUILD_ARM)
     add_subdirectory(servo_controller)
     add_subdirectory(led_handler)
-    add_subdirectory(diagnostic_handler)
 endif ()
