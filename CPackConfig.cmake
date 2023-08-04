@@ -17,4 +17,4 @@ else()
     set(CPACK_PACKAGE_FILE_NAME "RoboticArm-x86")
 endif(BUILD_ARM)
 
-set(CPACK_COMPONENTS_ALL RoboticArm)
+set(CPACK_COMPONENTS_ALL RoboticArm RoboticGui)

@@ -2,42 +2,9 @@ cmake_minimum_required(VERSION 3.5)
 
 project(gui VERSION 0.1 LANGUAGES CXX)
 
-if (BUILD_ARM)
-    # include($ENV{HOME}/qt-raspi/lib/cmake/Qt6/qt.toolchain.cmake)
-    # include($ENV{HOME}/RoboticArm/process/build-gui-RoboGuiKit-Release/.qtc/package-manager/auto-setup.cmake)
-    set(TARGET_SYSROOT ${HOME}/rpi-sysroot)
-    set(CMAKE_SYSROOT ${TARGET_SYSROOT})
-
-    set(ENV{PKG_CONFIG_PATH} $PKG_CONFIG_PATH:${CMAKE_SYSROOT}/usr/lib/aarch64-linux-gnu/pkgconfig)
-    set(ENV{PKG_CONFIG_LIBDIR} /usr/lib/pkgconfig:/usr/share/pkgconfig/:${TARGET_SYSROOT}/usr/lib/aarch64-linux-gnu/pkgconfig:${TARGET_SYSROOT}/usr/lib/pkgconfig)
-    set(ENV{PKG_CONFIG_SYSROOT_DIR} ${CMAKE_SYSROOT})
-    
-    set(CMAKE_TOOLCHAIN_FILE $ENV{HOME}/qt-raspi/lib/cmake/Qt6/qt.toolchain.cmake)
-    set(CMAKE_PREFIX_PATH $ENV{HOME}/qt-raspi)
-    set(CMAKE_SYSROOT $ENV{HOME}/rpi-sysroot)
-    # set(CMAKE_FIND_ROOT_PATH $ENV{HOME}/rpi-sysroot/usr/lib)
-    # set(CMAKE_GENERATOR Ninja)
-    # set(QT_QMAKE_EXECUTABLE $ENV{HOME}/qt-raspi/bin/qmake)
-    # set(QT_DIR $ENV{HOME}/qt-raspi)
-    # set(Qt6CoreTools_DIR $ENV{HOME}/qt-host/lib/cmake/Qt6CoreTools)
-    # set(Qt6Core_DIR $ENV{HOME}/qt-raspi/lib/cmake/Qt6Core)
-    # set(Qt6GuiTools_DIR $ENV{HOME}/qt-host/lib/cmake/Qt6GuiTools)
-    # set(Qt6Gui_DIR $ENV{HOME}/qt-raspi/lib/cmake/Qt6Gui)
-    # set(Qt6HostInfo_DIR $ENV{HOME}/qt-host/lib/cmake/Qt6HostInfo)
-    # set(Qt6WidgetsTools_DIR $ENV{HOME}/qt-host/lib/cmake/Qt6WidgetsTools)
-    # set(Qt6Widgets_DIR $ENV{HOME}/qt-raspi/lib/cmake/Qt6Widgets)
-    # set(Qt6_DIR $ENV{HOME}/qt-raspi/)
-    # set(XKB_INCLUDE_DIR $ENV{HOME}/rpi-sysroot/usr/include)
-    # set(XKB_LIBRARY $ENV{HOME}/rpi-sysroot/usr/lib/aarch64-linux-gnu/libxkbcommon.so)
-    # set(CMAKE_CXX_COMPILER_TARGET aarch64-linux-gnu)
-    # set(CMAKE_C_COMPILER /usr/bin/aarch64-linux-gnu-gcc)
-    # set(CMAKE_C_COMPILER_TARGET aarch64-linux-gnu)
-    set(GLESv2_DIR $ENV{HOME}/rpi-sysroot/usr/lib/aarch64-linux-gnu/libGLESv2.so)
-    set(EGL_LIBRARY $ENV{HOME}/rpi-sysroot/usr/lib/aarch64-linux-gnu/libEGL.so)
-    set(OPENGL_egl_LIBRARY $ENV{HOME}/rpi-sysroot/usr/lib/aarch64-linux-gnu/libEGL.so)
-else()
+if (NOT BUILD_ARM)
     set(CMAKE_PREFIX_PATH $ENV{HOME}/qt-host)
-endif (BUILD_ARM)
+endif (NOT BUILD_ARM)
 
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
@@ -63,8 +30,6 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
         resources.qrc
-
-
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET gui APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -85,8 +50,8 @@ else()
 endif()
 
 target_link_libraries(gui 
-    PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
-    # PRIVATE shmem_handler)
+    PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
+    PRIVATE library_shmem_handler)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
@@ -102,13 +67,15 @@ set_target_properties(gui PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
-include(GNUInstallDirs)
-install(TARGETS gui
-    BUNDLE DESTINATION .
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+# include(GNUInstallDirs)
+# install(TARGETS gui
+#     BUNDLE DESTINATION .
+#     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+#     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+# )
 
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(gui)
 endif()
+
+install(TARGETS ${PROJECT_NAME} COMPONENT RoboticGui)

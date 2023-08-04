@@ -30,4 +30,5 @@ done
 
 mkdir -p $BUILD_PATH
 cd $BUILD_PATH
-cmake $ARM_BUILD_FLAG $PROJECT_PATH 
+# cmake $ARM_BUILD_FLAG $PROJECT_PATH
+${HOME}/qt-raspi/bin/qt-cmake $ARM_BUILD_FLAG $PROJECT_PATH/CMakeLists.txt

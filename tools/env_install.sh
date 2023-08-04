@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# TODO: Need to rewrite this entirely to use only QT cross-compiler
+
 while getopts u:i:h flag
 do
     case "${flag}" in
