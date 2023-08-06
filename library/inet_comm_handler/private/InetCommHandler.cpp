@@ -24,7 +24,8 @@ std::int8_t InetCommHandler::createTcpServerSocket(const std::uint16_t & port)
     {
         std::cout << "Socket successfully created." << std::endl;
     }
-    bzero(&m_servaddr, sizeof(m_servaddr));
+//    bzero(&m_servaddr, sizeof(m_servaddr));
+    memset(&m_servaddr, sizeof(m_servaddr), 0);
 
     // assign IP, PORT
     m_servaddr.sin_family = AF_INET;
@@ -82,7 +83,8 @@ std::int8_t InetCommHandler::createTcpClientSocket(const std::uint16_t & port, c
     {
         std::cout << "Socket successfully created." << std::endl;
     }
-    bzero(&m_servaddr, sizeof(m_servaddr));
+    memset(&m_servaddr, sizeof(m_servaddr), 0);
+//    bzero(&m_servaddr, sizeof(m_servaddr));
  
     // assign IP, PORT
     m_servaddr.sin_family = AF_INET;
@@ -104,7 +106,8 @@ std::int8_t InetCommHandler::createTcpClientSocket(const std::uint16_t & port, c
 
 void InetCommHandler::serverRead(char * buff)
 {
-    bzero(buff, m_buffer_size);
+    memset(buff, m_buffer_size, 0);
+//    bzero(buff, m_buffer_size);
     read(m_connfd, buff, m_buffer_size);
 }
 
@@ -115,7 +118,8 @@ void InetCommHandler::serverWrite(const char * buff)
 
 void InetCommHandler::clientRead(char * buff)
 {
-    bzero(buff, m_buffer_size);
+    memset(buff, sizeof(m_buffer_size), 0);
+//    bzero(buff, m_buffer_size);
     read(m_sockfd, buff, m_buffer_size);
 }
 

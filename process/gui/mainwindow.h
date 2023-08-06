@@ -6,7 +6,14 @@
 #include "odin/shmem_wrapper/DataTypes.h"
 
 #include <QMainWindow>
+#include <QBarCategoryAxis>
+#include <QBarSeries>
+#include <QBarSet>
+#include <QChart>
+#include <QChartView>
+
 #include <memory>
+#include <cstdint>
 
 using namespace odin::diagnostic_handler;
 
@@ -15,9 +22,26 @@ namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
 enum BoardSelect {
-    GUI = 0,
-    ARM = 1
+    GUI,
+    ARM
 };
+
+enum WidgetPage {
+    MAIN,
+    JOYPAD,
+    DIAGNOSTIC,
+    AUTOMATIC
+};
+
+enum ChartSelect {
+    CPU_USAGE,
+    RAM_USAGE,
+    CPU_TEMP,
+    LATENCY
+};
+
+static constexpr std::uint8_t CHARTS_COUNT = 4;
+static constexpr std::uint8_t CHART_BINS = 10;
 
 class MainWindow : public QMainWindow
 {
@@ -38,23 +62,55 @@ private slots:
 
     void diagnosticTimerSlot();
 
+    void on_button_automatic_clicked();
+
+    void on_dial_step_sliderMoved(int position);
+
 private:
     void draw_menu();
     void disable_buttons();
+    void show_joypad();
+    void hide_joypad();
     void show_diagnostics();
     void hide_diagnostics();
+    void draw_charts();
+    void show_automatic();
+    void hide_automatic();
 
 private:
     Ui::MainWindow * ui;
     bool m_joypad_enabled;
+    bool m_automatic_enabled;
     bool m_diagnostic_enabled;
     bool m_diagnostic_board_selected;
+    bool m_chart_swap;
 
     std::unique_ptr<shmem_wrapper::ShmemHandler<DiagnosticData>> m_shmem_handler;
     DiagnosticData m_gui_diagnostic_data;
     DiagnosticData m_rak_diagnostic_data;
 
     QTimer * m_diagnostic_timer;
+
+    std::uint32_t m_charts_data[CHARTS_COUNT][CHART_BINS] = { 0 };
+    QBarSet * m_cpu_usage_set[2][CHART_BINS];
+    QBarSet * m_ram_usage_set[2][CHART_BINS];
+//    QBarSet * cpu_temp_set;
+//    QBarSet * latency_set;
+
+    QBarSeries * m_cpu_usage_series[2];
+    QBarSeries * m_ram_usage_series[2];
+//    QBarSeries * cpu_temp_series;
+//    QBarSeries * latency_series;
+
+    QChart * m_cpu_usage_chart[2];
+    QChart * m_ram_usage_chart[2];
+    QChart * m_cpu_temp_chart[2];
+    QChart * m_latency_chart[2];
+
+    QBarCategoryAxis * m_cpu_usage_axis_x[2];
+    QBarCategoryAxis * m_ram_usage_axis_x[2];
+    QBarCategoryAxis * m_cpu_temp_axis_x[2];
+    QBarCategoryAxis * m_latency_axis_x[2];
 private:
     const QString m_button_rpi_switch_gui_style_sheet =
         "padding: 1; \
@@ -76,6 +132,14 @@ private:
         "padding: 3; \
         background-color: rgb(204, 0, 0); \
         image: url(:/icons/resources/joypad.png);";
+    const QString m_enabled_automatic_style_sheet =
+        "padding: 3; \
+        background-color: rgb(255, 155, 0); \
+        image: url(:/icons/resources/automatic_icon.png);";
+        const QString m_disabled_automatic_style_sheet =
+        "padding: 3; \
+        background-color: rgb(204, 0, 0); \
+        image: url(:/icons/resources/automatic_icon.png);";
     const QString m_enabled_diagnostic_style_sheet =
         "padding: 3; \
         image: url(:/icons/resources/magnifying_glass.png); \

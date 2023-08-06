@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(gui VERSION 0.1 LANGUAGES CXX)
+project(odin_gui VERSION 0.1 LANGUAGES CXX)
 
 if (NOT BUILD_ARM)
     set(CMAKE_PREFIX_PATH $ENV{HOME}/qt-host)
@@ -15,8 +15,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(QT_DEBUG_FIND_PACKAGE ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Charts)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Charts)
 
 set(PROJECT_SOURCES
         main.cpp
@@ -26,31 +26,32 @@ set(PROJECT_SOURCES
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
-    qt_add_executable(gui
+    qt_add_executable(${PROJECT_NAME}
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
         resources.qrc
     )
 # Define target properties for Android with Qt 6 as:
-#    set_property(TARGET gui APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
+#    set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
 #                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
 # For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
 else()
     if(ANDROID)
-        add_library(gui SHARED
+        add_library(${PROJECT_NAME} SHARED
             ${PROJECT_SOURCES}
         )
 # Define properties for Android with Qt 5 after find_package() calls as:
 #    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
     else()
-        add_executable(gui
+        add_executable(${PROJECT_NAME}
             ${PROJECT_SOURCES}
         )
     endif()
 endif()
 
-target_link_libraries(gui 
+target_link_libraries(${PROJECT_NAME}
     PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
+    PRIVATE Qt${QT_VERSION_MAJOR}::Charts
     PRIVATE library_shmem_handler
     PRIVATE library_diagnostic_handler)
 
@@ -60,7 +61,7 @@ target_link_libraries(gui
 if(${QT_VERSION} VERSION_LESS 6.1.0)
   set(BUNDLE_ID_OPTION MACOSX_BUNDLE_GUI_IDENTIFIER com.example.gui)
 endif()
-set_target_properties(gui PROPERTIES
+set_target_properties(${PROJECT_NAME} PROPERTIES
     ${BUNDLE_ID_OPTION}
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
@@ -69,14 +70,14 @@ set_target_properties(gui PROPERTIES
 )
 
 # include(GNUInstallDirs)
-# install(TARGETS gui
+# install(TARGETS ${PROJECT_NAME}
 #     BUNDLE DESTINATION .
 #     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 #     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 # )
 
 if(QT_VERSION_MAJOR EQUAL 6)
-    qt_finalize_executable(gui)
+    qt_finalize_executable(${PROJECT_NAME})
 endif()
 
 install(TARGETS ${PROJECT_NAME} COMPONENT RoboticGui)

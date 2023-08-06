@@ -76,10 +76,10 @@ void ServoController::setAbsolutePosition(int position, int servo_num, int step 
             m_current_position[servo_num] = current_position;
             if (step < 3)
             {
-                std::this_thread::sleep_for(std::chrono::microseconds(10000));
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
             } else 
             {
-                std::this_thread::sleep_for(std::chrono::microseconds(1000));
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             
         }

@@ -67,7 +67,133 @@
          </property>
          <item>
           <widget class="QStackedWidget" name="stackedWidget">
-           <widget class="QWidget" name="stackedWidgetPage1">
+           <property name="currentIndex">
+            <number>2</number>
+           </property>
+           <widget class="QWidget" name="main_page">
+            <layout class="QGridLayout" name="gridLayout_20">
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item row="0" column="0">
+              <layout class="QGridLayout" name="gridLayout_19"/>
+             </item>
+            </layout>
+           </widget>
+           <widget class="QWidget" name="joypad_page">
+            <layout class="QGridLayout" name="gridLayout_18">
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item row="0" column="0">
+              <layout class="QGridLayout" name="gridLayout_17" rowstretch="1,2,1" columnstretch="1,2,1">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
+               <property name="topMargin">
+                <number>0</number>
+               </property>
+               <property name="rightMargin">
+                <number>0</number>
+               </property>
+               <property name="bottomMargin">
+                <number>0</number>
+               </property>
+               <item row="1" column="0">
+                <spacer name="horizontalSpacer_2">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item row="0" column="1">
+                <spacer name="verticalSpacer">
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>20</width>
+                   <height>40</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item row="1" column="1">
+                <widget class="QWidget" name="widget_2" native="true">
+                 <property name="minimumSize">
+                  <size>
+                   <width>562</width>
+                   <height>410</height>
+                  </size>
+                 </property>
+                 <property name="maximumSize">
+                  <size>
+                   <width>562</width>
+                   <height>410</height>
+                  </size>
+                 </property>
+                 <property name="styleSheet">
+                  <string notr="true">border-image: url(:/icons/resources/genesis_joypad_described_alpha.png);
+opacity: 0.1;</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="1">
+                <spacer name="verticalSpacer_2">
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>20</width>
+                   <height>40</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item row="1" column="2">
+                <spacer name="horizontalSpacer_3">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </widget>
+           <widget class="QWidget" name="diagnostic_page">
             <layout class="QGridLayout" name="gridLayout">
              <property name="leftMargin">
               <number>0</number>
@@ -147,18 +273,23 @@
                      <item>
                       <widget class="QWidget" name="widget_cpu_temp_chart" native="true">
                        <layout class="QGridLayout" name="gridLayout_10">
+                        <property name="leftMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="topMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="rightMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="bottomMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="spacing">
+                         <number>0</number>
+                        </property>
                         <item row="0" column="0">
-                         <widget class="QLabel" name="label_cpu_temp_val">
-                          <property name="styleSheet">
-                           <string notr="true">border: none;</string>
-                          </property>
-                          <property name="text">
-                           <string>0°C</string>
-                          </property>
-                          <property name="alignment">
-                           <set>Qt::AlignCenter</set>
-                          </property>
-                         </widget>
+                         <widget class="QChartView" name="chart_view_cpu_temp"/>
                         </item>
                        </layout>
                       </widget>
@@ -216,18 +347,23 @@
                      <item>
                       <widget class="QWidget" name="widget_ram_usage_chart" native="true">
                        <layout class="QGridLayout" name="gridLayout_9">
+                        <property name="leftMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="topMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="rightMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="bottomMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="spacing">
+                         <number>0</number>
+                        </property>
                         <item row="0" column="0">
-                         <widget class="QLabel" name="label_ram_usage_val">
-                          <property name="styleSheet">
-                           <string notr="true">border: none;</string>
-                          </property>
-                          <property name="text">
-                           <string>0%</string>
-                          </property>
-                          <property name="alignment">
-                           <set>Qt::AlignCenter</set>
-                          </property>
-                         </widget>
+                         <widget class="QChartView" name="chart_view_ram_usage"/>
                         </item>
                        </layout>
                       </widget>
@@ -285,18 +421,23 @@
                      <item>
                       <widget class="QWidget" name="widget_cpu_usage_chart" native="true">
                        <layout class="QGridLayout" name="gridLayout_11">
+                        <property name="leftMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="topMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="rightMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="bottomMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="spacing">
+                         <number>0</number>
+                        </property>
                         <item row="0" column="0">
-                         <widget class="QLabel" name="label_cpu_usage_val">
-                          <property name="styleSheet">
-                           <string notr="true">border: none;</string>
-                          </property>
-                          <property name="text">
-                           <string>0%</string>
-                          </property>
-                          <property name="alignment">
-                           <set>Qt::AlignCenter</set>
-                          </property>
-                         </widget>
+                         <widget class="QChartView" name="chart_view_cpu_usage"/>
                         </item>
                        </layout>
                       </widget>
@@ -373,18 +514,23 @@
                      <item>
                       <widget class="QWidget" name="widget_latency_chart" native="true">
                        <layout class="QGridLayout" name="gridLayout_12">
+                        <property name="leftMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="topMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="rightMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="bottomMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="spacing">
+                         <number>0</number>
+                        </property>
                         <item row="0" column="0">
-                         <widget class="QLabel" name="label_latency_val">
-                          <property name="styleSheet">
-                           <string notr="true">border: none;</string>
-                          </property>
-                          <property name="text">
-                           <string>0ms</string>
-                          </property>
-                          <property name="alignment">
-                           <set>Qt::AlignCenter</set>
-                          </property>
-                         </widget>
+                         <widget class="QChartView" name="chart_view_latency"/>
                         </item>
                        </layout>
                       </widget>
@@ -392,6 +538,153 @@
                     </layout>
                    </item>
                   </layout>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+           <widget class="QWidget" name="automatic_page">
+            <layout class="QGridLayout" name="gridLayout_16">
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <item row="0" column="0">
+              <widget class="QWidget" name="widget_automatic" native="true">
+               <layout class="QGridLayout" name="gridLayout_13">
+                <item row="0" column="1">
+                 <spacer name="horizontalSpacer">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item row="1" column="0" colspan="2">
+                 <layout class="QGridLayout" name="gridLayout_14" columnstretch="2,1" rowminimumheight="1,1,0" columnminimumwidth="0,0">
+                  <property name="leftMargin">
+                   <number>5</number>
+                  </property>
+                  <property name="topMargin">
+                   <number>5</number>
+                  </property>
+                  <property name="rightMargin">
+                   <number>5</number>
+                  </property>
+                  <property name="bottomMargin">
+                   <number>5</number>
+                  </property>
+                  <item row="0" column="1">
+                   <widget class="QListWidget" name="listWidget"/>
+                  </item>
+                  <item row="2" column="1">
+                   <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,1">
+                    <item>
+                     <widget class="QPushButton" name="button_load">
+                      <property name="sizePolicy">
+                       <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+                        <horstretch>0</horstretch>
+                        <verstretch>0</verstretch>
+                       </sizepolicy>
+                      </property>
+                      <property name="text">
+                       <string>Load File</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QPushButton" name="button_save">
+                      <property name="sizePolicy">
+                       <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+                        <horstretch>0</horstretch>
+                        <verstretch>0</verstretch>
+                       </sizepolicy>
+                      </property>
+                      <property name="text">
+                       <string>Save File</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QLineEdit" name="line_file_name"/>
+                    </item>
+                   </layout>
+                  </item>
+                  <item row="2" column="0">
+                   <widget class="QPushButton" name="pushButton">
+                    <property name="text">
+                     <string>Add Step</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="0">
+                   <layout class="QVBoxLayout" name="verticalLayout_5">
+                    <item>
+                     <widget class="QPlainTextEdit" name="automatic_steps"/>
+                    </item>
+                    <item>
+                     <layout class="QGridLayout" name="gridLayout_15">
+                      <item row="0" column="0">
+                       <widget class="QDial" name="dial_step">
+                        <property name="styleSheet">
+                         <string notr="true">background-color: rgb(252, 175, 62);</string>
+                        </property>
+                        <property name="minimum">
+                         <number>1</number>
+                        </property>
+                        <property name="maximum">
+                         <number>10</number>
+                        </property>
+                        <property name="invertedAppearance">
+                         <bool>false</bool>
+                        </property>
+                        <property name="invertedControls">
+                         <bool>false</bool>
+                        </property>
+                        <property name="wrapping">
+                         <bool>false</bool>
+                        </property>
+                        <property name="notchesVisible">
+                         <bool>true</bool>
+                        </property>
+                       </widget>
+                      </item>
+                      <item row="1" column="0">
+                       <widget class="QLabel" name="label_step">
+                        <property name="text">
+                         <string>Step: 1</string>
+                        </property>
+                        <property name="alignment">
+                         <set>Qt::AlignCenter</set>
+                        </property>
+                       </widget>
+                      </item>
+                     </layout>
+                    </item>
+                   </layout>
+                  </item>
+                 </layout>
+                </item>
+                <item row="0" column="0">
+                 <widget class="QRadioButton" name="radioButton">
+                  <property name="text">
+                   <string>Execute in loop</string>
+                  </property>
                  </widget>
                 </item>
                </layout>
@@ -426,6 +719,19 @@
                <verstretch>0</verstretch>
               </sizepolicy>
              </property>
+             <property name="minimumSize">
+              <size>
+               <width>60</width>
+               <height>60</height>
+              </size>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="button_automatic">
              <property name="minimumSize">
               <size>
                <width>60</width>
@@ -498,6 +804,13 @@
    </layout>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QChartView</class>
+   <extends>QGraphicsView</extends>
+   <header>QtCharts/QChartView.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

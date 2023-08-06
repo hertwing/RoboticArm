@@ -79,8 +79,17 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_size, bool is_ow
         m_reader_sem_name = m_reader_sem_prefix + m_shmem_name + m_identifier_num;
 
         createShmem();
+
+//        while(!createShmem())
+//        {
+//            std::this_thread::sleep_for(std::chrono::seconds(1));
+//        };
     } else {
         openShmem();
+//        while(!openShmem())
+//        {
+//            std::this_thread::sleep_for(std::chrono::seconds(1));
+//        };
     }
 }
 
@@ -174,7 +183,7 @@ bool ShmemHandler<T>::openShmem()
             if (m_shmem_fd < 0)
             {
                 std::cout << "Couldn't open shmem fd." << std::endl;
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                // std::this_thread::sleep_for(std::chrono::seconds(1));
                 return 0;
             }
             m_data = (T *)mmap(0, m_shmem_data_size, PROT_READ | PROT_WRITE, MAP_SHARED, m_shmem_fd, 0);
@@ -214,20 +223,9 @@ bool ShmemHandler<T>::shmemWrite(const T * data)
         std::cout << "sem_post post for reader semaphore failed." << std::endl;
         return 0;
     }
-    // memcpy(frame, &test1, sizeof(frame));
-    std::memcpy(m_data, data, m_shmem_data_size);
-    // for (int i = 0; i < m_shmem_data_size; ++i)
-    // {
-    //     std::cout << data->data[i] << std::endl;
-    //     std::cout << m_data->data[i] << std::endl;
-    // }
 
-    // std::this_thread::sleep_for(std::chrono::seconds(10));
-    
-    // for (int i = 0; i < m_shmem_data_size; ++i)
-    // {
-    //     m_data[i] = data[i];
-    // }
+    std::memcpy(m_data, data, m_shmem_data_size);
+
     if (sem_wait(m_reader_sem) == -1)
     {
         std::cout << "sem_wait for reader semaphore failed." << std::endl;
@@ -256,16 +254,7 @@ bool ShmemHandler<T>::shmemRead(T * data)
     }
 
     std::memcpy(data, m_data, m_shmem_data_size);
-    // for (int i = 0; i < m_shmem_data_size; ++i)
-    // {
-    //     std::cout << data->data[i] << std::endl;
-    //     std::cout << m_data->data[i] << std::endl;
-    // }
-    // std::this_thread::sleep_for(std::chrono::seconds(10));
-    // for (int i = 0; i < m_shmem_data_size; ++i)
-    // {
-    //     data[i] = m_data[i];
-    // }
+
     if (sem_wait(m_writer_sem) == -1)
     {
         std::cout << "sem_wait for writer semaphore failed." << std::endl;
@@ -286,7 +275,7 @@ bool ShmemHandler<T>::readShmemId()
     if (!ifs.is_open())
     {
         std::cout << "Failed to open " << m_shmem_identifier_path << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        // std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     else
     {

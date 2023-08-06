@@ -5,5 +5,8 @@
         <file>resources/power_off.png</file>
         <file>resources/power_off_white.png</file>
         <file>resources/rpi_icon.png</file>
+        <file>resources/automatic_icon.png</file>
+        <file>resources/genesis_joypad.png</file>
+        <file>resources/genesis_joypad_described_alpha.png</file>
     </qresource>
 </RCC>
