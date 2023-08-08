@@ -3,6 +3,7 @@
 mkdir -p /tmp/logs
 
 ./bin/diagnostic_manager OdinArm > /tmp/logs/diagnostic_manager.log 2>&1 &
+./bin/gui_gateway OdinArm > /tmp/logs/gui_gateway.log 2>&1 &
 ./bin/led_manager > /tmp/logs/led_manager.log 2>&1 &
 ./bin/joypad_manager > /tmp/logs/joypad_manager.log 2>&1 &
 ./bin/servo_manager > /tmp/logs/servo_manager.log 2>&1 &

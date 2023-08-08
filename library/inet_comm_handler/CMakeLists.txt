@@ -6,11 +6,7 @@ endif (BUILD_ARM)
 
 set(HEADERS
     public/InetCommData.h
-    public/InetCommHandler.h
-    )
-
-set(SOURCES
-    private/InetCommHandler.cpp
+    public/InetCommHandler.hpp
     )
 
 add_library(library_${PROJECT_NAME}
@@ -22,9 +18,8 @@ target_include_directories(library_${PROJECT_NAME}
     PUBLIC public
     )
 
+set_target_properties(library_${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE CXX)
+
 # target_link_libraries(library_${PROJECT_NAME}
-#     PUBLIC library_shmem_handler
-#     PUBLIC stdc++fs
-#     PUBLIC rt
-#     PUBLIC pthread
+#     PUBLIC library_diagnostic_handler
 #     )

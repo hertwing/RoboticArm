@@ -25,7 +25,7 @@ struct DiagnosticData
     std::uint32_t cpu_usage = 0;
     std::uint32_t ram_usage = 0;
     std::uint32_t cpu_temp = 0;
-    std::uint32_t latency = 0;
+    double latency = 0.0;
 };
 
 } // diagnostic_handler

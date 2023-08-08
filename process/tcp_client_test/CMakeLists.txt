@@ -10,5 +10,6 @@ add_executable(${PROJECT_NAME}
 
 target_link_libraries(${PROJECT_NAME}
     PRIVATE library_inet_comm_handler
+    PRIVATE library_diagnostic_handler
     PRIVATE pthread
 )

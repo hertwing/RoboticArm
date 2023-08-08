@@ -21,8 +21,8 @@ DiagnosticHandler::DiagnosticHandler():
     m_cpu_temp(0),
     m_latency(0)
 {
-    m_shmem_handler = std::make_unique<shmem_wrapper::ShmemHandler<DiagnosticData>>(
-        shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), true);
+    m_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
+        odin::shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), true);
 }
 
 std::string DiagnosticHandler::execCmd(const char * cmd)
@@ -82,11 +82,11 @@ void DiagnosticHandler::getCpuTemp(std::uint32_t & data)
     }
 }
 
-void DiagnosticHandler::getLatency(std::uint32_t & data, const std::string & board_name)
+void DiagnosticHandler::getLatency(double & data, const std::string & board_name)
 {
     try
     {
-        board_name == ARM_BOARD_NAME ? data = stoi(execCmd(LATENCY_ARM_CMD)) : data = stoi(execCmd(LATENCY_GUI_CMD));
+        board_name == ARM_BOARD_NAME ? data = std::stod(execCmd(LATENCY_ARM_CMD)) : data = std::stod(execCmd(LATENCY_GUI_CMD));
     }
     catch(const std::exception & error)
     {

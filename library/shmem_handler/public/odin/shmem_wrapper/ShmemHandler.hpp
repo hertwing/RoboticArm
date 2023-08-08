@@ -17,12 +17,15 @@
 
 // TODO: Create config files for communication types. Not all processes needs to have both reader and writer rights.
 
-namespace shmem_wrapper {
+namespace odin
+{
+namespace shmem_wrapper
+{
 
 template <typename T>
 class ShmemHandler {
 public:
-    ShmemHandler(const char * shmem_name, int data_bins, bool is_owner);
+    ShmemHandler(const char * shmem_name, std::uint32_t data_size, bool is_owner);
     ~ShmemHandler();
 
     bool createShmem();
@@ -53,14 +56,14 @@ private:
 
     T * m_data;
 
-    int m_shmem_data_size;
+    std::uint32_t m_shmem_data_size;
 
     sem_t * m_writer_sem;
     sem_t * m_reader_sem;
 };
 
 template <typename T>
-ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_size, bool is_owner) :
+ShmemHandler<T>::ShmemHandler(const char * shmem_name, std::uint32_t data_size, bool is_owner) :
     m_shmem_data_size(data_size),
     m_is_owner(is_owner),
     m_identifier_num(""),
@@ -68,7 +71,7 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_size, bool is_ow
 {
     m_shmem_name = static_cast<std::string>(shmem_name);
 
-    m_shmem_identifier_path = static_cast<std::string>(shmem_wrapper::DataTypes::SHMEM_IDENTIFIER_PATH) + m_shmem_name + shmem_wrapper::DataTypes::SHMEM_IDENTIFIER_NAME;
+    m_shmem_identifier_path = static_cast<std::string>(DataTypes::SHMEM_IDENTIFIER_PATH) + m_shmem_name + DataTypes::SHMEM_IDENTIFIER_NAME;
 
     if (m_is_owner)
     {
@@ -79,7 +82,6 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, int data_size, bool is_ow
         m_reader_sem_name = m_reader_sem_prefix + m_shmem_name + m_identifier_num;
 
         createShmem();
-
 //        while(!createShmem())
 //        {
 //            std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -119,11 +121,11 @@ bool ShmemHandler<T>::createShmem()
     }
     else
     {
-        if (!std::filesystem::exists(shmem_wrapper::DataTypes::SHMEM_IDENTIFIER_PATH))
+        if (!std::filesystem::exists(DataTypes::SHMEM_IDENTIFIER_PATH))
         {
-            if (!std::filesystem::create_directories(shmem_wrapper::DataTypes::SHMEM_IDENTIFIER_PATH))
+            if (!std::filesystem::create_directories(DataTypes::SHMEM_IDENTIFIER_PATH))
             {
-                std::cout << "Couldn't create directory " + static_cast<std::string>(shmem_wrapper::DataTypes::SHMEM_IDENTIFIER_PATH) << std::endl;
+                std::cout << "Couldn't create directory " + static_cast<std::string>(DataTypes::SHMEM_IDENTIFIER_PATH) << std::endl;
                 return 0;
             }
             else 
@@ -298,5 +300,6 @@ bool ShmemHandler<T>::readShmemId()
 }
 
 } // shmem_wrapper
+} // odin
 
 #endif //SHMEMHANDLER_H

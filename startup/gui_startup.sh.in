@@ -3,4 +3,5 @@
 mkdir -p /tmp/logs
 
 ./bin/diagnostic_manager OdinGui > /tmp/logs/diagnostic_manager.log 2>&1 &
+./bin/gui_gateway OdinGui > /tmp/logs/gui_gateway.log 2>&1 &
 ./bin/odin_gui > /tmp/logs/odin_gui.log 2>&1 &

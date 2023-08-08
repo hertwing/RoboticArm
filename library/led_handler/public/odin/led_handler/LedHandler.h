@@ -22,7 +22,7 @@ public:
 private:
     ws2811_t m_ledstring;
     ws2811_led_t m_led_color_status[led_handler::LED_COUNT];
-    std::unique_ptr<shmem_wrapper::ShmemHandler<ws2811_led_t>> m_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<ws2811_led_t>> m_shmem_handler;
     bool m_is_color_changed;
 };
 

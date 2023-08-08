@@ -1,4 +1,5 @@
 #!/bin/bash
 
 kill -SIGINT $(ps aux | grep -e odin_gui | awk '{ print $2 }')
+kill -SIGINT $(ps aux | grep -e gui_gateway | awk '{ print $2 }')
 kill -SIGINT $(ps aux | grep -e diagnostic_manager | awk '{ print $2 }')

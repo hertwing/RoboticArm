@@ -9,7 +9,6 @@ set(HEADERS
     public/odin/shmem_wrapper/DataTypes.h
     )
 
-
 add_library(library_${PROJECT_NAME}
     ${HEADERS}
     )

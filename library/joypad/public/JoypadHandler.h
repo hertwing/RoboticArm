@@ -51,7 +51,7 @@ private:
 
     JoypadData m_joypad_data_neutral_values;
 
-    std::unique_ptr<shmem_wrapper::ShmemHandler<JoypadData>> m_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<JoypadData>> m_shmem_handler;
 };
 
 #endif // JOYPADHANDLER_H

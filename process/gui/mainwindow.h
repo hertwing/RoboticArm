@@ -2,15 +2,19 @@
 #define MAINWINDOW_H
 
 #include "odin/diagnostic_handler/DataTypes.h"
-#include "odin/shmem_wrapper/ShmemHandler.hpp"
 #include "odin/shmem_wrapper/DataTypes.h"
+#include "odin/shmem_wrapper/ShmemHandler.hpp"
 
-#include <QMainWindow>
 #include <QBarCategoryAxis>
 #include <QBarSeries>
 #include <QBarSet>
 #include <QChart>
 #include <QChartView>
+#include <QLineSeries>
+#include <QMainWindow>
+#include <QPieSeries>
+#include <QPieSlice>
+#include <QValueAxis>
 
 #include <memory>
 #include <cstdint>
@@ -40,8 +44,9 @@ enum ChartSelect {
     LATENCY
 };
 
-static constexpr std::uint8_t CHARTS_COUNT = 4;
+static constexpr std::uint8_t INT_CHARTS_COUNT = 3;
 static constexpr std::uint8_t CHART_BINS = 10;
+static constexpr double LATENCY_MAX = 20.0;
 
 class MainWindow : public QMainWindow
 {
@@ -85,22 +90,23 @@ private:
     bool m_diagnostic_board_selected;
     bool m_chart_swap;
 
-    std::unique_ptr<shmem_wrapper::ShmemHandler<DiagnosticData>> m_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_gui_diagnostic_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_arm_diagnostic_shmem_handler;
     DiagnosticData m_gui_diagnostic_data;
     DiagnosticData m_rak_diagnostic_data;
 
     QTimer * m_diagnostic_timer;
 
-    std::uint32_t m_charts_data[CHARTS_COUNT][CHART_BINS] = { 0 };
+    std::uint32_t m_charts_data[INT_CHARTS_COUNT][CHART_BINS] = { 0 };
+    double m_latency_chart_data;
     QBarSet * m_cpu_usage_set[2][CHART_BINS];
     QBarSet * m_ram_usage_set[2][CHART_BINS];
-//    QBarSet * cpu_temp_set;
-//    QBarSet * latency_set;
 
     QBarSeries * m_cpu_usage_series[2];
     QBarSeries * m_ram_usage_series[2];
-//    QBarSeries * cpu_temp_series;
-//    QBarSeries * latency_series;
+    QLineSeries * m_cpu_temp_series[2];
+    QPieSeries * m_latency_series[2];
+    QPieSlice * m_latency_slice[2][2];
 
     QChart * m_cpu_usage_chart[2];
     QChart * m_ram_usage_chart[2];

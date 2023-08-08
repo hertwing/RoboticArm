@@ -7,7 +7,7 @@ endif (BUILD_ARM)
 add_executable(${PROJECT_NAME}
     main.cpp
     private/JoypadManager.cpp
-)
+    )
 
 target_include_directories(${PROJECT_NAME}
     PRIVATE public

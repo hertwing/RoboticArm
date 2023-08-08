@@ -14,7 +14,7 @@ static constexpr std::uint8_t LED_COUNT = 6;
 
 static constexpr ws2811_led_t LED_COLOR_NONE = 0x00000000;
 static constexpr ws2811_led_t LED_COLOR_RED = 0x00200000;
-static constexpr ws2811_led_t LED_COLOR_ORANGE = 0x00201000;
+static constexpr ws2811_led_t LED_COLOR_ORANGE = 0x00200200;
 static constexpr ws2811_led_t LED_COLOR_YELLOW = 0x00202000;
 static constexpr ws2811_led_t LED_COLOR_GREEN = 0x00002000;
 static constexpr ws2811_led_t LED_COLOR_LIGHTBLUE = 0x00002020;
