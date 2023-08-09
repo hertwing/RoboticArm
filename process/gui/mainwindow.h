@@ -1,6 +1,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "InetCommData.h"
 #include "odin/diagnostic_handler/DataTypes.h"
 #include "odin/shmem_wrapper/DataTypes.h"
 #include "odin/shmem_wrapper/ShmemHandler.hpp"
@@ -25,19 +26,19 @@ QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
 
-enum BoardSelect {
+enum class BoardSelect {
     GUI,
     ARM
 };
 
-enum WidgetPage {
+enum class WidgetPage {
     MAIN,
     JOYPAD,
     DIAGNOSTIC,
     AUTOMATIC
 };
 
-enum ChartSelect {
+enum class ChartSelect {
     CPU_USAGE,
     RAM_USAGE,
     CPU_TEMP,
@@ -92,8 +93,11 @@ private:
 
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_gui_diagnostic_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_arm_diagnostic_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
     DiagnosticData m_gui_diagnostic_data;
     DiagnosticData m_rak_diagnostic_data;
+
+    OdinControlSelection m_control_selection;
 
     QTimer * m_diagnostic_timer;
 

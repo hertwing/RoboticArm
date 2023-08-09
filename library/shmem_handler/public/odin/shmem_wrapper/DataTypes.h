@@ -14,6 +14,8 @@ struct DataTypes {
     static constexpr const char * LED_SHMEM_NAME = "LedShmem";
     static constexpr const char * DIAGNOSTIC_SHMEM_NAME = "DiagnosticShmem";
     static constexpr const char * DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME = "DiagnosticFromRemoteShmem";
+    static constexpr const char * CONTROL_SELECT_SHMEM_NAME = "ControlSelectShmem";
+
 };
 
 } // shmem_wrapper

@@ -22,6 +22,10 @@ ServoManager::ServoManager() :
         odin::shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, sizeof(JoypadData), false);
     m_led_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<ws2811_led_t>>(
         odin::shmem_wrapper::DataTypes::LED_SHMEM_NAME, sizeof(m_led_color_status), false);
+    m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>>(
+        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), false);
+    m_previous_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
     if (m_led_shmem_handler->openShmem())
     {
         updateLedColors();
@@ -32,16 +36,52 @@ void ServoManager::servoDataReader()
 {
     while (m_run_process)
     {
-        if (m_joypad_shmem_handler->openShmem() && m_led_shmem_handler->openShmem())
+        if (m_joypad_shmem_handler->openShmem() && m_led_shmem_handler->openShmem() && m_control_selection_shmem_handler->openShmem())
         {
-            if (m_joypad_shmem_handler->shmemRead(&m_joypad_data))
+            if (m_control_selection_shmem_handler->shmemRead(&m_control_selection))
             {
-                praseJoypadData();
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                if (m_previous_control_selection.control_selection != m_control_selection.control_selection)
+                {
+                    std::cout << +(m_previous_control_selection.control_selection) << " " << +(m_control_selection.control_selection) << std::endl;
+                    m_previous_control_selection.control_selection = m_control_selection.control_selection;
+                    std::cout << "Control selection changed to: ";
+                    switch(m_control_selection.control_selection)
+                    {
+                        case static_cast<std::uint8_t>(ControlSelection::JOYPAD):
+                            std::cout << "JOYPAD." << std::endl;
+                            break;
+                        case static_cast<std::uint8_t>(ControlSelection::AUTOMATIC):
+                            std::cout << "AUTOMATIC." << std::endl;
+                            break;
+                        default:
+                            std::cout << "NONE." << std::endl;
+                            break;
+                    }
+                }
+                if (m_control_selection.control_selection == static_cast<std::uint8_t>(ControlSelection::JOYPAD))
+                {
+                    if (m_joypad_shmem_handler->shmemRead(&m_joypad_data))
+                    {
+                        praseJoypadData();
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    }
+                    else
+                    {
+                        std::cout << "Couldn't read from shmem." << std::endl;
+                    }
+                }
+                else if (m_control_selection.control_selection == static_cast<std::uint8_t>(ControlSelection::AUTOMATIC))
+                {
+
+                }
+                else
+                {
+                    // No control option selected
+                }
             }
             else
             {
-                std::cout << "Couldn't read from shmem." << std::endl;
+                std::cout << "Couldn't read from control selection shmem." << std::endl;
             }
         }
         else

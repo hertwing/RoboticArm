@@ -53,7 +53,8 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
     PRIVATE Qt${QT_VERSION_MAJOR}::Charts
     PRIVATE library_shmem_handler
-    PRIVATE library_diagnostic_handler)
+    PRIVATE library_diagnostic_handler
+    PRIVATE library_inet_comm_handler)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an

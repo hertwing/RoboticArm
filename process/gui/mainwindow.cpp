@@ -16,16 +16,20 @@ MainWindow::MainWindow(QWidget *parent)
     m_joypad_enabled(false),
     m_automatic_enabled(false),
     m_diagnostic_enabled(false),
-    m_diagnostic_board_selected(BoardSelect::GUI),
+    m_diagnostic_board_selected(static_cast<bool>(BoardSelect::GUI)),
     m_chart_swap(0)
 {
     m_gui_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), false);
     m_arm_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME, sizeof(DiagnosticData), false);
+    m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>>(
+        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), true);
+
     ui->setupUi(this);
 
     m_diagnostic_timer = nullptr;
+    m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
 
     draw_charts();
     draw_menu();
@@ -55,7 +59,7 @@ void MainWindow::draw_menu()
     ui->button_exit->setStyleSheet(m_button_exit_style_sheet);
     ui->button_rpi_switch->setStyleSheet(m_button_rpi_switch_gui_style_sheet);
     // Widgets
-    ui->stackedWidget->setCurrentIndex(WidgetPage::MAIN);
+    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
     ui->widget_cpu_temp->setStyleSheet(m_diagnostic_widget_style_sheet);
     ui->widget_cpu_temp_chart->setStyleSheet(m_diagnostic_chart_widget_style_sheet);
     ui->widget_cpu_usage->setStyleSheet(m_diagnostic_widget_style_sheet);
@@ -95,11 +99,14 @@ void MainWindow::on_button_joypad_clicked()
     }
 
     m_joypad_enabled = !m_joypad_enabled;
+    m_joypad_enabled ? m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::JOYPAD) : m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    m_control_selection_shmem_handler->shmemWrite(&m_control_selection);
     m_joypad_enabled ? show_joypad() : hide_joypad();
 }
 
 void MainWindow::on_button_diagnostic_clicked()
 {
+    // TODO: Rewrite to not turn off control option
     // Turn off joypad
     if (m_joypad_enabled)
     {
@@ -114,6 +121,8 @@ void MainWindow::on_button_diagnostic_clicked()
     }
 
     m_diagnostic_enabled = !m_diagnostic_enabled;
+    m_diagnostic_enabled ? m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::DIAGNOSTIC) : m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    m_control_selection_shmem_handler->shmemWrite(&m_control_selection);
     m_diagnostic_enabled ? show_diagnostics() : hide_diagnostics();
 }
 
@@ -133,6 +142,8 @@ void MainWindow::on_button_automatic_clicked()
     }
 
     m_automatic_enabled = !m_automatic_enabled;
+    m_automatic_enabled ? m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::AUTOMATIC) : m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    m_control_selection_shmem_handler->shmemWrite(&m_control_selection);
     m_automatic_enabled ? show_automatic() : hide_automatic();
 }
 
@@ -162,20 +173,20 @@ void MainWindow::disable_buttons()
 void MainWindow::show_joypad()
 {
     ui->stackedWidget->show();
-    ui->stackedWidget->setCurrentIndex(WidgetPage::JOYPAD);
+    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::JOYPAD));
     ui->button_joypad->setStyleSheet(m_enabled_joypad_style_sheet);
 }
 
 void MainWindow::hide_joypad()
 {
-    ui->stackedWidget->setCurrentIndex(WidgetPage::MAIN);
+    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
     ui->button_joypad->setStyleSheet(m_disabled_joypad_style_sheet);
 }
 
 void MainWindow::show_diagnostics()
 {
     ui->stackedWidget->show();
-    ui->stackedWidget->setCurrentIndex(WidgetPage::DIAGNOSTIC);
+    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::DIAGNOSTIC));
     ui->button_diagnostic->setStyleSheet(m_enabled_diagnostic_style_sheet);
 
     m_diagnostic_timer = new QTimer(this);
@@ -190,19 +201,19 @@ void MainWindow::hide_diagnostics()
         delete m_diagnostic_timer;
     }
 
-    ui->stackedWidget->setCurrentIndex(WidgetPage::MAIN);
+    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
     ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
 }
 
 void MainWindow::show_automatic()
 {
-    ui->stackedWidget->setCurrentIndex(WidgetPage::AUTOMATIC);
+    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::AUTOMATIC));
     ui->button_automatic->setStyleSheet(m_enabled_automatic_style_sheet);
 }
 
 void MainWindow::hide_automatic()
 {
-    ui->stackedWidget->setCurrentIndex(WidgetPage::MAIN);
+    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
     ui->button_automatic->setStyleSheet(m_disabled_automatic_style_sheet);
 }
 
@@ -247,9 +258,9 @@ void MainWindow::diagnosticTimerSlot()
         }
     }
     // Get latest data to last char bin
-    m_charts_data[CPU_USAGE][CHART_BINS-1] = m_gui_diagnostic_data.cpu_usage;
-    m_charts_data[RAM_USAGE][CHART_BINS-1] = m_gui_diagnostic_data.ram_usage;
-    m_charts_data[CPU_TEMP][CHART_BINS-1] = m_gui_diagnostic_data.cpu_temp;
+    m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_USAGE)][CHART_BINS-1] = m_gui_diagnostic_data.cpu_usage;
+    m_charts_data[static_cast<std::uint32_t>(ChartSelect::RAM_USAGE)][CHART_BINS-1] = m_gui_diagnostic_data.ram_usage;
+    m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_TEMP)][CHART_BINS-1] = m_gui_diagnostic_data.cpu_temp;
     m_latency_chart_data = m_gui_diagnostic_data.latency;
 
     // Draw charts
@@ -270,16 +281,16 @@ void MainWindow::draw_charts()
     m_ram_usage_axis_x[m_chart_swap] = new QBarCategoryAxis();
     m_cpu_temp_axis_x[m_chart_swap] = new QBarCategoryAxis();
 
-    m_cpu_usage_axis_x[m_chart_swap]->append(QString::number(+m_charts_data[CPU_USAGE][CHART_BINS-1]) + "%");
-    m_ram_usage_axis_x[m_chart_swap]->append(QString::number(+m_charts_data[RAM_USAGE][CHART_BINS-1])+ "%");
-    m_cpu_temp_axis_x[m_chart_swap]->append(QString::number(+m_charts_data[CPU_TEMP][CHART_BINS-1]) + "°C");
+    m_cpu_usage_axis_x[m_chart_swap]->append(QString::number(+m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_USAGE)][CHART_BINS-1]) + "%");
+    m_ram_usage_axis_x[m_chart_swap]->append(QString::number(+m_charts_data[static_cast<std::uint32_t>(ChartSelect::RAM_USAGE)][CHART_BINS-1])+ "%");
+    m_cpu_temp_axis_x[m_chart_swap]->append(QString::number(+m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_TEMP)][CHART_BINS-1]) + "°C");
 
     for(int i=0; i<CHART_BINS; ++i)
     {
         m_cpu_usage_set[m_chart_swap][i] = new QBarSet("");
         m_ram_usage_set[m_chart_swap][i] = new QBarSet("");
-        m_cpu_usage_set[m_chart_swap][i]->append(m_charts_data[CPU_USAGE][i]);
-        m_ram_usage_set[m_chart_swap][i]->append(m_charts_data[RAM_USAGE][i]);
+        m_cpu_usage_set[m_chart_swap][i]->append(m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_USAGE)][i]);
+        m_ram_usage_set[m_chart_swap][i]->append(m_charts_data[static_cast<std::uint32_t>(ChartSelect::RAM_USAGE)][i]);
         m_cpu_usage_set[m_chart_swap][i]->setColor(QColor(239, 41, 41));
         m_ram_usage_set[m_chart_swap][i]->setColor(QColor(114, 159, 207));
     }
@@ -322,7 +333,7 @@ void MainWindow::draw_charts()
     {
         m_cpu_usage_series[m_chart_swap]->append(m_cpu_usage_set[m_chart_swap][i]);
         m_ram_usage_series[m_chart_swap]->append(m_ram_usage_set[m_chart_swap][i]);
-        m_cpu_temp_series[m_chart_swap]->append(i, m_charts_data[CPU_TEMP][i]);
+        m_cpu_temp_series[m_chart_swap]->append(i, m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_TEMP)][i]);
     }
 
     m_cpu_usage_chart[m_chart_swap]->addSeries(m_cpu_usage_series[m_chart_swap]);
