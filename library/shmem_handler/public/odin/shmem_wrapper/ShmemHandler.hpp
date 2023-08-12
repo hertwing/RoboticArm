@@ -117,6 +117,7 @@ bool ShmemHandler<T>::createShmem()
     if (m_shmem_fd < 0)
     {
         std::cout << "Couldn't open " + m_shmem_name_with_id << " errno: " << m_shmem_fd << std::endl;
+        close(m_shmem_fd);
         return 0;
     }
     else
@@ -126,6 +127,7 @@ bool ShmemHandler<T>::createShmem()
             if (!std::filesystem::create_directories(DataTypes::SHMEM_IDENTIFIER_PATH))
             {
                 std::cout << "Couldn't create directory " + static_cast<std::string>(DataTypes::SHMEM_IDENTIFIER_PATH) << std::endl;
+                close(m_shmem_fd);
                 return 0;
             }
             else 
@@ -151,22 +153,30 @@ bool ShmemHandler<T>::createShmem()
         {
             std::cout << "Couldn't create semaphore " + m_writer_sem_name << std::endl;
             // TODO: Delete shmem if coudln't create semaphores
+            sem_close(m_writer_sem);
+            close(m_shmem_fd);
             return 0;
         }
         if ((m_reader_sem = sem_open(m_reader_sem_name.c_str(), O_CREAT, 0660, 0)) == SEM_FAILED)
         {
             std::cout << "Couldn't create semaphore " + m_reader_sem_name << std::endl;
+            sem_close(m_reader_sem);
+            close(m_shmem_fd);
             return 0;
         }
         std::cout << "Posting reader and writer semaphores after creation: " << m_writer_sem_name << ", " << m_reader_sem_name << std::endl;
         if (sem_post(m_writer_sem) == -1)
         {
             std::cout << "Couldn't post writer semaphore." << std::endl;
+            sem_close(m_reader_sem);
+            close(m_shmem_fd);
             return 0;
         }
         if (sem_post(m_reader_sem) == -1)
         {
             std::cout << "Couldn't post reader semaphore." << std::endl;
+            sem_close(m_reader_sem);
+            close(m_shmem_fd);
             return 0;
         }
     }
@@ -186,6 +196,7 @@ bool ShmemHandler<T>::openShmem()
             {
                 std::cout << "Couldn't open shmem fd." << std::endl;
                 // std::this_thread::sleep_for(std::chrono::seconds(1));
+                close(m_shmem_fd);
                 return 0;
             }
             m_data = (T *)mmap(0, m_shmem_data_size, PROT_READ | PROT_WRITE, MAP_SHARED, m_shmem_fd, 0);
@@ -194,12 +205,16 @@ bool ShmemHandler<T>::openShmem()
             if ((m_writer_sem = sem_open(m_writer_sem_name.c_str(), 0, 0, 0)) == SEM_FAILED)
             {
                 std::cout << "Couldn't create semaphore " + m_writer_sem_name << std::endl;
+                sem_close(m_writer_sem);
+                close(m_shmem_fd);
                 return 0;
             }
             std::cout << "Opening semaphore: " << m_reader_sem_name << std::endl;
             if ((m_reader_sem = sem_open(m_reader_sem_name.c_str(), 0, 0, 0)) == SEM_FAILED)
             {
                 std::cout << "Couldn't create semaphore " + m_reader_sem_name << std::endl;
+                sem_close(m_reader_sem);
+                close(m_shmem_fd);
                 return 0;
             }
             m_is_shmem_opened = true;
@@ -208,7 +223,7 @@ bool ShmemHandler<T>::openShmem()
         }
         return 1;
     }
-    std::cout << "Returning 0" << std::endl;
+    std::cout << "Error occured during opening shared memory." << std::endl;
     return 0;
 }
 

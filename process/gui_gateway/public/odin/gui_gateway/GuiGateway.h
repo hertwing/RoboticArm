@@ -42,7 +42,9 @@ private:
     std::unique_ptr<InetCommHandler<OdinControlSelection>> m_control_selection_comm_handler;
     std::unique_ptr<ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
     DiagnosticData m_remote_diagnostic;
+    DiagnosticData m_previous_remote_diagnostic;
     OdinControlSelection m_control_selection;
+    OdinControlSelection m_previous_control_selection;
 
     std::thread m_diagnostic_thread;
     std::thread m_control_selection_thread;

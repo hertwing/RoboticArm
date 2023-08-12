@@ -22,6 +22,28 @@ static constexpr const char * LATENCY_ARM_CMD = "ping -c 1 192.168.1.41 | grep t
 
 struct DiagnosticData
 {
+    bool operator!=(const DiagnosticData & obj) const
+    {
+        if (cpu_usage == obj.cpu_usage)
+            return false;
+        else if (ram_usage == obj.ram_usage)
+            return false;
+        else if (ram_usage == obj.ram_usage)
+            return false;
+        else if (latency == obj.latency)
+            return false;
+        return true;
+    }
+
+    DiagnosticData & operator=(const DiagnosticData & obj)
+    {
+        cpu_usage = obj.cpu_usage;
+        ram_usage = obj.ram_usage;
+        cpu_temp = obj.cpu_temp;
+        latency = obj.latency;
+        return *this;
+    }
+
     std::uint32_t cpu_usage = 0;
     std::uint32_t ram_usage = 0;
     std::uint32_t cpu_temp = 0;

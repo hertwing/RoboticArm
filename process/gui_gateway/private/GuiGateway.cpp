@@ -20,6 +20,7 @@ bool GuiGateway::m_run_process = true;
 GuiGateway::GuiGateway()
 {
     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    m_previous_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
 }
 
 void GuiGateway::runProcess(int argc, char * argv[])
@@ -44,7 +45,10 @@ void GuiGateway::runProcess(int argc, char * argv[])
 
 void GuiGateway::runOnGui()
 {
+<<<<<<< Updated upstream
     // Testing puprposes only. Need to be rewrite
+=======
+>>>>>>> Stashed changes
     std::cout << "Assigning threads." << std::endl;
     std::cout << "Starting GUI diagnostic thread." << std::endl;
     m_diagnostic_thread = std::thread(handleGuiDiagnostic, this);
@@ -56,8 +60,11 @@ void GuiGateway::runOnGui()
 
 void GuiGateway::runOnArm()
 {
+<<<<<<< Updated upstream
     // Testing puprposes only. Need to be rewrite
 
+=======
+>>>>>>> Stashed changes
     std::cout << "Assigning threads." << std::endl;
     std::cout << "Starting ARM diagnostic thread." << std::endl;
     m_diagnostic_thread = std::thread(handleArmDiagnostic, this);
@@ -69,6 +76,7 @@ void GuiGateway::runOnArm()
 
 void GuiGateway::handleGuiDiagnostic(GuiGateway * gg)
 {
+<<<<<<< Updated upstream
 
     gg->m_diagnostic_shmem_handler = std::make_unique<ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME, sizeof(DiagnosticData), true);
@@ -78,12 +86,31 @@ void GuiGateway::handleGuiDiagnostic(GuiGateway * gg)
     {
         // std::cout << "Reading data from server." << std::endl;
         gg->m_diagnostic_comm_handler->serverRead(&(gg->m_remote_diagnostic));
+=======
+    gg->m_diagnostic_comm_handler = std::make_unique<InetCommHandler<DiagnosticData>>(
+        sizeof(odin::diagnostic_handler::DiagnosticData), DIAGNOSTIC_SOCKET_PORT);
+    gg->m_diagnostic_shmem_handler = std::make_unique<ShmemHandler<DiagnosticData>>(
+        odin::shmem_wrapper::DataTypes::DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME, sizeof(DiagnosticData), true);
+    while (gg->m_run_process)
+    {
+        // std::cout << "Reading data from server." << std::endl;
+        std::cout << "Server reads diagnostic from client." << std::endl;
+        gg->m_diagnostic_comm_handler->serverRead(&gg->m_remote_diagnostic);
+>>>>>>> Stashed changes
         // std::cout << gg->m_remote_diagnostic.cpu_temp << " "
         //         << gg->m_remote_diagnostic.cpu_usage << " "
         //         << gg->m_remote_diagnostic.ram_usage << " "
         //         << gg->m_remote_diagnostic.latency << std::endl;
         // std::cout << "Writing to shmem." << std::endl;
+<<<<<<< Updated upstream
         gg->m_diagnostic_shmem_handler->shmemWrite(&(gg->m_remote_diagnostic));
+=======
+        if (gg->m_previous_remote_diagnostic != gg->m_remote_diagnostic)
+        {
+            gg->m_diagnostic_shmem_handler->shmemWrite(&gg->m_remote_diagnostic);
+            gg->m_previous_remote_diagnostic = gg->m_remote_diagnostic;
+        }
+>>>>>>> Stashed changes
         // TODO: change magic number to settings constants for sleeps
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
@@ -91,40 +118,83 @@ void GuiGateway::handleGuiDiagnostic(GuiGateway * gg)
 
 void GuiGateway::handleGuiControlSelection(GuiGateway * gg)
 {   
+<<<<<<< Updated upstream
     gg->m_control_selection_shmem_handler = std::make_unique<ShmemHandler<OdinControlSelection>>(
         odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), false);
     gg->m_control_selection_comm_handler = std::make_unique<InetCommHandler<OdinControlSelection>>(
         sizeof(OdinControlSelection), CONTROL_SELECTION_PORT);
+=======
+    gg->m_control_selection_comm_handler = std::make_unique<InetCommHandler<OdinControlSelection>>(
+        sizeof(OdinControlSelection), CONTROL_SELECTION_PORT);
+    gg->m_control_selection_shmem_handler = std::make_unique<ShmemHandler<OdinControlSelection>>(
+        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), false);
+>>>>>>> Stashed changes
     while (gg->m_run_process)
     {
         if (gg->m_control_selection_shmem_handler->openShmem())
         {
+<<<<<<< Updated upstream
             if(gg->m_control_selection_shmem_handler->shmemRead(&(gg->m_control_selection)))
             {
                 gg->m_control_selection_comm_handler->serverWrite(&(gg->m_control_selection));
+=======
+            if(gg->m_control_selection_shmem_handler->shmemRead(&gg->m_control_selection))
+            {
+                if (gg->m_control_selection.control_selection != gg->m_previous_control_selection.control_selection)
+                {
+                    std::cout << "Writing control to client" << std::endl;
+                    gg->m_control_selection_comm_handler->serverWrite(&gg->m_control_selection);
+                    gg->m_previous_control_selection.control_selection = gg->m_control_selection.control_selection;
+                }
+>>>>>>> Stashed changes
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 }
 
 void GuiGateway::handleArmDiagnostic(GuiGateway * gg)
 {
+<<<<<<< Updated upstream
     gg->m_diagnostic_shmem_handler = std::make_unique<ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), false);
     gg->m_diagnostic_comm_handler = std::make_unique<InetCommHandler<DiagnosticData>>(
         sizeof(odin::diagnostic_handler::DiagnosticData), DIAGNOSTIC_SOCKET_PORT, ROBOTIC_GUI_IP);
+=======
+
+    gg->m_diagnostic_comm_handler = std::make_unique<InetCommHandler<DiagnosticData>>(
+        sizeof(odin::diagnostic_handler::DiagnosticData), DIAGNOSTIC_SOCKET_PORT, ROBOTIC_GUI_IP);
+    gg->m_diagnostic_shmem_handler = std::make_unique<ShmemHandler<DiagnosticData>>(
+        odin::shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), false);
+>>>>>>> Stashed changes
     while (gg->m_run_process)
     {
         // std::cout << "Reading from shmem." << std::endl;
         if (gg->m_diagnostic_shmem_handler->openShmem())
         {
+<<<<<<< Updated upstream
             if (gg->m_diagnostic_shmem_handler->shmemRead(&(gg->m_remote_diagnostic)))
             {
                 std::cout << "Writing diagnostic to server." << std::endl;
                 gg->m_diagnostic_comm_handler->clientWrite(&(gg->m_remote_diagnostic));
             }
         }
+=======
+            if (gg->m_diagnostic_shmem_handler->shmemRead(&gg->m_remote_diagnostic))
+            {
+                std::cout << "Diagnostic data read from shmem." << std::endl;
+                if (gg->m_previous_remote_diagnostic != gg->m_remote_diagnostic)
+                {
+                    std::cout << "Diagnostic data change. Writing to server." << std::endl;
+                    gg->m_diagnostic_comm_handler->clientWrite(&gg->m_remote_diagnostic);
+                    gg->m_previous_remote_diagnostic = gg->m_remote_diagnostic;
+                    std::cout << "Writing to server end." << std::endl;
+                }
+            }
+        }
+        
+            
+>>>>>>> Stashed changes
         // std::cout << gg->m_remote_diagnostic.cpu_temp << " "
         //     << gg->m_remote_diagnostic.cpu_usage << " "
         //     << gg->m_remote_diagnostic.ram_usage << " "
@@ -136,6 +206,7 @@ void GuiGateway::handleArmDiagnostic(GuiGateway * gg)
 
 void GuiGateway::handleArmControlSelection(GuiGateway * gg)
 {
+<<<<<<< Updated upstream
     gg->m_control_selection_shmem_handler = std::make_unique<ShmemHandler<OdinControlSelection>>(
         odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), true);
     gg->m_control_selection_comm_handler = std::make_unique<InetCommHandler<OdinControlSelection>>(
@@ -147,6 +218,26 @@ void GuiGateway::handleArmControlSelection(GuiGateway * gg)
         gg->m_control_selection_comm_handler->clientRead(&(gg->m_control_selection));
         gg->m_control_selection_shmem_handler->shmemWrite(&(gg->m_control_selection));
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
+=======
+
+    gg->m_control_selection_comm_handler = std::make_unique<InetCommHandler<OdinControlSelection>>(
+        sizeof(OdinControlSelection), CONTROL_SELECTION_PORT, ROBOTIC_GUI_IP);
+    gg->m_control_selection_shmem_handler = std::make_unique<ShmemHandler<OdinControlSelection>>(
+        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), true);
+    gg->m_control_selection_shmem_handler->shmemWrite(&gg->m_control_selection);
+
+    while (gg->m_run_process)
+    {
+        
+        gg->m_control_selection_comm_handler->clientRead(&gg->m_control_selection);
+        if (gg->m_control_selection.control_selection != gg->m_previous_control_selection.control_selection)
+        {
+            std::cout << "Reading control from client and writing to shmem" << std::endl;
+            gg->m_control_selection_shmem_handler->shmemWrite(&gg->m_control_selection);
+            gg->m_previous_control_selection.control_selection = gg->m_control_selection.control_selection;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+>>>>>>> Stashed changes
     }
 }
 
