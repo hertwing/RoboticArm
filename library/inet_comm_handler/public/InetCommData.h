@@ -23,6 +23,21 @@ enum class ControlSelection
 
 struct OdinControlSelection
 {
+    bool operator!=(const OdinControlSelection & obj) const
+    {
+        if (control_selection == obj.control_selection)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    OdinControlSelection & operator=(const OdinControlSelection & obj)
+    {
+        control_selection = obj.control_selection;
+        return *this;
+    }
+
     std::uint8_t control_selection;
 };
 

@@ -25,13 +25,21 @@ struct DiagnosticData
     bool operator!=(const DiagnosticData & obj) const
     {
         if (cpu_usage == obj.cpu_usage)
+        {
             return false;
+        }
         else if (ram_usage == obj.ram_usage)
+        {
             return false;
-        else if (ram_usage == obj.ram_usage)
+        }
+        else if (cpu_temp == obj.cpu_temp)
+        {
             return false;
+        } 
         else if (latency == obj.latency)
+        {
             return false;
+        }
         return true;
     }
 
