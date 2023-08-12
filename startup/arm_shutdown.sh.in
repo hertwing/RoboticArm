@@ -5,3 +5,11 @@ kill -SIGINT $(ps aux | grep -e joypad_manager | awk '{ print $2 }')
 kill -SIGINT $(ps aux | grep -e led_manager | awk '{ print $2 }')
 kill -SIGINT $(ps aux | grep -e gui_gateway | awk '{ print $2 }')
 kill -SIGINT $(ps aux | grep -e diagnostic_manager | awk '{ print $2 }')
+
+sleep 2
+
+kill -SIGTERM $(ps aux | grep -e servo_manager | awk '{ print $2 }')
+kill -SIGTERM $(ps aux | grep -e joypad_manager | awk '{ print $2 }')
+kill -SIGTERM $(ps aux | grep -e led_manager | awk '{ print $2 }')
+kill -SIGTERM $(ps aux | grep -e gui_gateway | awk '{ print $2 }')
+kill -SIGTERM $(ps aux | grep -e diagnostic_manager | awk '{ print $2 }')
