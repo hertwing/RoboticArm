@@ -13,3 +13,6 @@ kill -SIGTERM $(ps aux | grep -e joypad_manager | awk '{ print $2 }')
 kill -SIGTERM $(ps aux | grep -e led_manager | awk '{ print $2 }')
 kill -SIGTERM $(ps aux | grep -e gui_gateway | awk '{ print $2 }')
 kill -SIGTERM $(ps aux | grep -e diagnostic_manager | awk '{ print $2 }')
+
+# Remove from /dev/shm
+rm -rf /dev/shm/*
