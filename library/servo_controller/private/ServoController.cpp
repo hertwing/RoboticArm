@@ -47,6 +47,17 @@ void ServoController::setStartupPosition()
 
 void ServoController::setAbsolutePosition(int position, int servo_num, int step = 1)
 {
+    if (servo_num == 5)
+    {
+        if (position >= 2300)
+        {
+            return;
+        } 
+        else if (position <= 780)
+        {
+            return;
+        }
+    }
     std::cout << "Moving servo number: " << servo_num << " to position: " << position << ". Step: " << step << "." << std::endl;
     std::uint16_t current_position = m_current_position[servo_num];
     while (current_position != position)
