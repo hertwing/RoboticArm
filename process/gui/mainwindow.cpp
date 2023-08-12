@@ -190,7 +190,7 @@ void MainWindow::show_diagnostics()
     ui->button_diagnostic->setStyleSheet(m_enabled_diagnostic_style_sheet);
 
     m_diagnostic_timer = new QTimer(this);
-    m_diagnostic_timer->start(250);
+    m_diagnostic_timer->start(300);
     connect(m_diagnostic_timer, SIGNAL(timeout()), this, SLOT(diagnosticTimerSlot()));
 }
 

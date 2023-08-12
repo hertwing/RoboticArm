@@ -28,7 +28,7 @@ ServoManager::ServoManager() :
     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
     if (m_led_shmem_handler->openShmem())
     {
-        updateLedColors();
+        updateLedColors(LedOption::IDLE);
     }
 }
 
@@ -48,12 +48,15 @@ void ServoManager::servoDataReader()
                     switch(m_control_selection.control_selection)
                     {
                         case static_cast<std::uint8_t>(ControlSelection::JOYPAD):
+                            updateLedColors(LedOption::JOYPAD);
                             std::cout << "JOYPAD." << std::endl;
                             break;
                         case static_cast<std::uint8_t>(ControlSelection::AUTOMATIC):
+                            updateLedColors(LedOption::AUTOMATIC);
                             std::cout << "AUTOMATIC." << std::endl;
                             break;
                         default:
+                            updateLedColors(LedOption::IDLE);
                             std::cout << "NONE." << std::endl;
                             break;
                     }
@@ -63,7 +66,6 @@ void ServoManager::servoDataReader()
                     if (m_joypad_shmem_handler->shmemRead(&m_joypad_data))
                     {
                         praseJoypadData();
-                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
                     }
                     else
                     {
@@ -72,12 +74,13 @@ void ServoManager::servoDataReader()
                 }
                 else if (m_control_selection.control_selection == static_cast<std::uint8_t>(ControlSelection::AUTOMATIC))
                 {
-
+                    
                 }
                 else
                 {
-                    // No control option selected
+                    
                 }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
             else
             {
@@ -106,20 +109,82 @@ void ServoManager::praseJoypadData()
     if (m_joypad_data_types.leftTrigger && m_joypad_data_previous.data[0] != 1)
     {
         --m_current_servo_l;
-        if (m_current_servo_l < 1)
+        if (m_current_servo_l == m_current_servo_r)
+        {
+            if (m_current_servo_r != 0)
+            {
+                --m_current_servo_l;
+            }
+            else
+            {
+                ++m_current_servo_l;
+            }
+        }
+        if (m_current_servo_l < 0)
         {
             ++m_current_servo_l;
         }
-        updateLedColors();
+        updateLedColors(LedOption::JOYPAD);
     }
     if (m_joypad_data_types.leftBumper && m_joypad_data_previous.data[0] != 4)
     {
         ++m_current_servo_l;
+        if (m_current_servo_l == m_current_servo_r)
+        {
+            if (m_current_servo_r != 0)
+            {
+                ++m_current_servo_l;
+            }
+            else
+            {
+                --m_current_servo_l;
+            }
+        }
         if (m_current_servo_l > 5)
         {
             --m_current_servo_l;
         }
-        updateLedColors();
+        updateLedColors(LedOption::JOYPAD);
+    }
+    if (m_joypad_data_types.rightTrigger && m_joypad_data_previous.data[0] != 2)
+    {
+        --m_current_servo_r;
+        if (m_current_servo_r == m_current_servo_l)
+        {
+            if (m_current_servo_l != 0)
+            {
+                --m_current_servo_r;
+            }
+            else
+            {
+                ++m_current_servo_r;
+            }
+        }
+        if (m_current_servo_r < 0)
+        {
+            ++m_current_servo_r;
+        }
+        updateLedColors(LedOption::JOYPAD);
+    }
+    if (m_joypad_data_types.rightBumper && m_joypad_data_previous.data[0] != 8)
+    {
+        ++m_current_servo_r;
+        if (m_current_servo_r == m_current_servo_l)
+        {
+            if (m_current_servo_l != 5)
+            {
+                ++m_current_servo_r;
+            }
+            else
+            {
+                --m_current_servo_r;
+            }
+        }
+        if (m_current_servo_r > 5)
+        {
+            --m_current_servo_r;
+        }
+        updateLedColors(LedOption::JOYPAD);
     }
 
     if (m_joypad_data_types.leftStickX < 125)
@@ -147,11 +212,25 @@ void ServoManager::praseJoypadData()
     }
     if (m_joypad_data_types.rightStickX < 125)
     {
-        m_servo_controller.moveLeft(0, m_joypad_data_types.rightStickX);
+        if (m_current_servo_r == 5)
+        {
+            m_servo_controller.moveRight(m_current_servo_r, 255 - m_joypad_data_types.rightStickX);
+        }
+        else
+        {
+            m_servo_controller.moveLeft(m_current_servo_r, m_joypad_data_types.rightStickX);
+        }
     }
     else if (m_joypad_data_types.rightStickX > 129)
     {
-        m_servo_controller.moveRight(0, 255 - m_joypad_data_types.rightStickX);
+        if (m_current_servo_r == 5)
+        {
+            m_servo_controller.moveLeft(m_current_servo_r, m_joypad_data_types.rightStickX);
+        }
+        else
+        {
+            m_servo_controller.moveRight(m_current_servo_r, 255 - m_joypad_data_types.rightStickX);
+        }
     }
 
     for (int i = 0; i < JoypadHandler::JOYPAD_CONTROL_DATA_BINS; ++i)
@@ -160,16 +239,49 @@ void ServoManager::praseJoypadData()
     }
 }
 
-void ServoManager::updateLedColors()
+void ServoManager::updateLedColors(std::uint8_t led_options)
 {
-    for (int i = 0; i < led_handler::LED_COUNT; ++i)
+    switch(led_options)
     {
-        m_led_color_status[i] = led_handler::LED_COLOR_NONE;
-    }
-    m_led_color_status[m_current_servo_l] = led_handler::LED_COLOR_ORANGE;
-    m_led_color_status[m_current_servo_r] = led_handler::LED_COLOR_PINK;
+        case LedOption::JOYPAD:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_NONE;
+            }
+            m_led_color_status[m_current_servo_l] = led_handler::LED_COLOR_ORANGE;
+            m_led_color_status[m_current_servo_r] = led_handler::LED_COLOR_PINK;
 
-    m_led_shmem_handler->shmemWrite(m_led_color_status);
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+        case LedOption::AUTOMATIC:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_GREEN;
+            }
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+        case LedOption::ERROR:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_RED;
+            }
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+        case LedOption::IDLE:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_LIGHTBLUE;
+            }
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+        default:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_NONE;
+            }
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+    }
 }
 
 void ServoManager::runProcess()

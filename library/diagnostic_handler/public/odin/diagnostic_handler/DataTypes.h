@@ -26,19 +26,16 @@ struct DiagnosticData
     {
         if (cpu_usage == obj.cpu_usage)
         {
-            return false;
-        }
-        else if (ram_usage == obj.ram_usage)
-        {
-            return false;
-        }
-        else if (cpu_temp == obj.cpu_temp)
-        {
-            return false;
-        } 
-        else if (latency == obj.latency)
-        {
-            return false;
+            if (ram_usage == obj.ram_usage)
+            {
+                if (cpu_temp == obj.cpu_temp)
+                {
+                    if (latency == obj.latency)
+                    {
+                        return false;
+                    }
+                } 
+            }
         }
         return true;
     }

@@ -15,10 +15,10 @@ static constexpr std::uint16_t CONTROL_SELECTION_PORT = 7072;
 // TODO: Rewrite to cinfig file
 enum class ControlSelection
 {
+    NONE,
     JOYPAD,
     AUTOMATIC,
-    DIAGNOSTIC,
-    NONE
+    DIAGNOSTIC
 };
 
 struct OdinControlSelection

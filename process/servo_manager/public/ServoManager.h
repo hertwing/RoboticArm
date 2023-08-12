@@ -14,6 +14,15 @@
 #include <cstdint>
 #include <semaphore.h>
 
+// TODO: Move it to config file
+enum LedOption
+{
+    JOYPAD,
+    AUTOMATIC,
+    IDLE,
+    ERROR
+};
+
 class ServoManager
 {
 public:
@@ -49,7 +58,7 @@ private:
     static constexpr int JOYPAD_CONTROL_DATA_BINS = 7;
 private:
     void praseJoypadData();
-    void updateLedColors();
+    void updateLedColors(std::uint8_t led_options);
 };
 
 #endif // SERVOMANAGER_H

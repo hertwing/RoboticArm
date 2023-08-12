@@ -20,6 +20,7 @@ bool GuiGateway::m_run_process = true;
 GuiGateway::GuiGateway()
 {
     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    m_previous_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
 }
 
 void GuiGateway::runProcess(int argc, char * argv[])
@@ -78,14 +79,19 @@ void GuiGateway::handleGuiDiagnostic(GuiGateway * gg)
     {
         // std::cout << "Reading data from server." << std::endl;
         gg->m_diagnostic_comm_handler->serverRead(&(gg->m_remote_diagnostic));
+        if (gg->m_remote_diagnostic != gg->m_previous_remote_diagnostic)
+        {
+            gg->m_diagnostic_shmem_handler->shmemWrite(&(gg->m_remote_diagnostic));
+            gg->m_previous_remote_diagnostic = gg->m_remote_diagnostic;
+        }
         // std::cout << gg->m_remote_diagnostic.cpu_temp << " "
         //         << gg->m_remote_diagnostic.cpu_usage << " "
         //         << gg->m_remote_diagnostic.ram_usage << " "
         //         << gg->m_remote_diagnostic.latency << std::endl;
         // std::cout << "Writing to shmem." << std::endl;
-        gg->m_diagnostic_shmem_handler->shmemWrite(&(gg->m_remote_diagnostic));
+        
         // TODO: change magic number to settings constants for sleeps
-        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
 }
 
@@ -101,10 +107,15 @@ void GuiGateway::handleGuiControlSelection(GuiGateway * gg)
         {
             if(gg->m_control_selection_shmem_handler->shmemRead(&(gg->m_control_selection)))
             {
-                gg->m_control_selection_comm_handler->serverWrite(&(gg->m_control_selection));
+                if (gg->m_control_selection != gg->m_previous_control_selection)
+                {
+                    std::cout << "Control selection changed. Writing to client." << std::endl;
+                    gg->m_control_selection_comm_handler->serverWrite(&(gg->m_control_selection));
+                    gg->m_previous_control_selection = gg->m_control_selection;
+                }
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 }
 
@@ -121,8 +132,11 @@ void GuiGateway::handleArmDiagnostic(GuiGateway * gg)
         {
             if (gg->m_diagnostic_shmem_handler->shmemRead(&(gg->m_remote_diagnostic)))
             {
-                std::cout << "Writing diagnostic to server." << std::endl;
-                gg->m_diagnostic_comm_handler->clientWrite(&(gg->m_remote_diagnostic));
+                if (gg->m_remote_diagnostic != gg->m_previous_remote_diagnostic)
+                {
+                    gg->m_diagnostic_comm_handler->clientWrite(&(gg->m_remote_diagnostic));
+                    gg->m_previous_remote_diagnostic = gg->m_remote_diagnostic;
+                }
             }
         }
         // std::cout << gg->m_remote_diagnostic.cpu_temp << " "
@@ -130,7 +144,7 @@ void GuiGateway::handleArmDiagnostic(GuiGateway * gg)
         //     << gg->m_remote_diagnostic.ram_usage << " "
         //     << gg->m_remote_diagnostic.latency << std::endl;
         // std::cout << "Writing to server." << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
 }
 
@@ -143,11 +157,15 @@ void GuiGateway::handleArmControlSelection(GuiGateway * gg)
     gg->m_control_selection_shmem_handler->shmemWrite(&(gg->m_control_selection));
     while (gg->m_run_process)
     {
-        
-        std::cout << "Reading controlls from server." << std::endl;
         gg->m_control_selection_comm_handler->clientRead(&(gg->m_control_selection));
-        gg->m_control_selection_shmem_handler->shmemWrite(&(gg->m_control_selection));
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        if (gg->m_control_selection != gg->m_previous_control_selection)
+        {
+            std::cout << "Control selection changed." << std::endl;
+            gg->m_control_selection_shmem_handler->shmemWrite(&(gg->m_control_selection));
+            gg->m_previous_control_selection = gg->m_control_selection;
+        }
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 }
 

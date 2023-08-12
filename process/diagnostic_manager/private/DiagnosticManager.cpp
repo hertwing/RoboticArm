@@ -25,7 +25,7 @@ void DiagnosticManager::diagnosticReader()
     while (m_run_process)
     {
         m_diagnostic_handler.writeDiagnostic(m_board_name);
-        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
 }
 
