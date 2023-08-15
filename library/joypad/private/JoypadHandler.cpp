@@ -197,6 +197,7 @@ void JoypadHandler::parseRightStickAxis(const char * data)
 
 void JoypadHandler::signalCallbackHandler(int signum)
 {
+    odin::shmem_wrapper::ShmemHandler<JoypadData>::signalCallbackHandler(signum);
     std::cout << "JoypadHandler received signal: " << signum << std::endl;
     m_run_process = false;
 }

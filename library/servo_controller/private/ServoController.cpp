@@ -45,19 +45,8 @@ void ServoController::setStartupPosition()
     }
 }
 
-void ServoController::setAbsolutePosition(int position, int servo_num, int step = 1)
+void ServoController::setAbsolutePosition(uint16_t position, uint8_t servo_num, uint8_t step = 1)
 {
-    if (servo_num == 5)
-    {
-        if (position >= 2300)
-        {
-            return;
-        } 
-        else if (position <= 780)
-        {
-            return;
-        }
-    }
     std::cout << "Moving servo number: " << servo_num << " to position: " << position << ". Step: " << step << "." << std::endl;
     std::uint16_t current_position = m_current_position[servo_num];
     while (current_position != position)
@@ -79,7 +68,8 @@ void ServoController::setAbsolutePosition(int position, int servo_num, int step 
             }
         }
         if ((servo_num >= 0 && servo_num < SERVO_NUM && current_position >= MIN_POS_VAL && current_position <= MAX_POS_VAL && servo_num != 1) || 
-            (servo_num == 1 && current_position >= SERVO_1_MIN_POS_VAL && current_position <= SERVO_1_MAX_POS_VAL))
+            (servo_num == 1 && current_position >= SERVO_1_MIN_POS_VAL && current_position <= SERVO_1_MAX_POS_VAL) ||
+            (servo_num == 5 && current_position >= GRIPPER_MIN_POS_VAL && current_position <= GRIPPER_MAX_POS_VAL))
         {
             float millis = static_cast<float>(current_position) / 1000;
             int tick = calcTicks(millis, HERTZ);
@@ -101,7 +91,7 @@ void ServoController::setAbsolutePosition(int position, int servo_num, int step 
     }
 }
 
-void ServoController::moveLeft(int servo_num, uint8_t value)
+void ServoController::moveLeft(uint8_t servo_num, uint8_t value)
 {
     if (servo_num == 1)
     {
@@ -117,7 +107,7 @@ void ServoController::moveLeft(int servo_num, uint8_t value)
     }
 }
 
-void ServoController::moveRight(int servo_num, uint8_t value)
+void ServoController::moveRight(uint8_t servo_num, uint8_t value)
 {
     if (servo_num == 1)
     {

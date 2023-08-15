@@ -1,14 +1,17 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
-#include <QTimer>
+#include <thread>
 
 #include <QList>
-
-#include <chrono>
-#include <thread>
+#include <QTableWidget>
+#include <QTableWidgetItem>
+#include <QTimer>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -17,8 +20,21 @@ MainWindow::MainWindow(QWidget *parent)
     m_automatic_enabled(false),
     m_diagnostic_enabled(false),
     m_diagnostic_board_selected(static_cast<bool>(BoardSelect::GUI)),
-    m_chart_swap(0)
+    m_chart_swap(0),
+    m_automatic_line_edit_select(static_cast<std::uint8_t>(AutomaticLineEditSelect::NONE)),
+    m_is_servo_num_valid(false),
+    m_is_servo_pos_valid(false),
+    m_is_servo_speed_valid(false),
+    m_is_delay_valid(false),
+    m_run_in_loop(false),
+    m_automatic_file_path(std::filesystem::path(odin::shmem_wrapper::DataTypes::AUTOMATIC_FILES_PATH))
 {
+    ui->setupUi(this);
+
+    scan_automatic_files();
+
+    m_automatic_steps_count = ui->table_servo_steps->rowCount();
+
     m_gui_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), false);
     m_arm_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
@@ -26,9 +42,10 @@ MainWindow::MainWindow(QWidget *parent)
     m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>>(
         odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), true);
 
-    ui->setupUi(this);
+    m_diagnostic_timer = new QTimer(this);
+    m_diagnostic_timer->start(300);
+    connect(m_diagnostic_timer, SIGNAL(timeout()), this, SLOT(diagnosticTimerSlot()));
 
-    m_diagnostic_timer = nullptr;
     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
 
     draw_charts();
@@ -48,6 +65,7 @@ MainWindow::~MainWindow()
     delete ram_usage_chart_ptr;
     delete cpu_temp_chart_ptr;
     delete latency_chart_ptr;
+    delete m_diagnostic_timer;
 }
 
 void MainWindow::draw_menu()
@@ -188,19 +206,10 @@ void MainWindow::show_diagnostics()
     ui->stackedWidget->show();
     ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::DIAGNOSTIC));
     ui->button_diagnostic->setStyleSheet(m_enabled_diagnostic_style_sheet);
-
-    m_diagnostic_timer = new QTimer(this);
-    m_diagnostic_timer->start(300);
-    connect(m_diagnostic_timer, SIGNAL(timeout()), this, SLOT(diagnosticTimerSlot()));
 }
 
 void MainWindow::hide_diagnostics()
 {
-    if (m_diagnostic_timer != nullptr)
-    {
-        delete m_diagnostic_timer;
-    }
-
     ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
     ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
 }
@@ -385,9 +394,708 @@ void MainWindow::draw_charts()
     }
 }
 
-
-void MainWindow::on_dial_step_sliderMoved(int position)
+void MainWindow::on_radioButton_servo_num_toggled(bool checked)
 {
-    ui->label_step->setText("Step: " + QString::number(position));
+    if (checked)
+    {
+        ui->radioButton_servo_pos->setChecked(false);
+        ui->radioButton_servo_speed->setChecked(false);
+        ui->radioButton_delay->setChecked(false);
+        m_automatic_line_edit_select = static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM);
+    }
+}
+
+void MainWindow::on_radioButton_servo_pos_toggled(bool checked)
+{
+    if (checked)
+    {
+        ui->radioButton_servo_num->setChecked(false);
+        ui->radioButton_servo_speed->setChecked(false);
+        ui->radioButton_delay->setChecked(false);
+        m_automatic_line_edit_select = static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS);
+    }
+}
+
+
+void MainWindow::on_radioButton_servo_speed_toggled(bool checked)
+{
+    if (checked)
+    {
+        ui->radioButton_servo_pos->setChecked(false);
+        ui->radioButton_servo_num->setChecked(false);
+        ui->radioButton_delay->setChecked(false);
+        m_automatic_line_edit_select = static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED);
+    }
+}
+
+void MainWindow::on_radioButton_delay_toggled(bool checked)
+{
+    if (checked)
+    {
+        ui->radioButton_servo_pos->setChecked(false);
+        ui->radioButton_servo_speed->setChecked(false);
+        ui->radioButton_servo_num->setChecked(false);
+        m_automatic_line_edit_select = static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY);
+    }
+}
+
+void MainWindow::on_button_clear_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+        ui->lineEdit_servo_num->clear();
+        break;
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+        ui->lineEdit_servo_pos->clear();
+        break;
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+        ui->lineEdit_servo_speed->clear();
+        break;
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+        ui->lineEdit_delay->clear();
+        break;
+    default:
+        break;
+    }
+}
+
+void MainWindow::on_button_del_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+    {
+        QString current_text = ui->lineEdit_servo_num->text();
+        current_text.chop(1);
+        ui->lineEdit_servo_num->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+    {
+        QString current_text = ui->lineEdit_servo_pos->text();
+        current_text.chop(1);
+        ui->lineEdit_servo_pos->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+    {
+        QString current_text = ui->lineEdit_servo_speed->text();
+        current_text.chop(1);
+        ui->lineEdit_servo_speed->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+    {
+        QString current_text = ui->lineEdit_delay->text();
+        current_text.chop(1);
+        ui->lineEdit_delay->setText(current_text);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void MainWindow::on_button_0_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+    {
+        QString current_text = ui->lineEdit_servo_num->text();
+        current_text.append('0');
+        ui->lineEdit_servo_num->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+    {
+        QString current_text = ui->lineEdit_servo_pos->text();
+        current_text.append('0');
+        ui->lineEdit_servo_pos->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+    {
+        QString current_text = ui->lineEdit_servo_speed->text();
+        current_text.append('0');
+        ui->lineEdit_servo_speed->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+    {
+        QString current_text = ui->lineEdit_delay->text();
+        current_text.append('0');
+        ui->lineEdit_delay->setText(current_text);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+
+void MainWindow::on_button_1_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+    {
+        QString current_text = ui->lineEdit_servo_num->text();
+        current_text.append('1');
+        ui->lineEdit_servo_num->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+    {
+        QString current_text = ui->lineEdit_servo_pos->text();
+        current_text.append('1');
+        ui->lineEdit_servo_pos->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+    {
+        QString current_text = ui->lineEdit_servo_speed->text();
+        current_text.append('1');
+        ui->lineEdit_servo_speed->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+    {
+        QString current_text = ui->lineEdit_delay->text();
+        current_text.append('1');
+        ui->lineEdit_delay->setText(current_text);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+
+void MainWindow::on_button_2_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+    {
+        QString current_text = ui->lineEdit_servo_num->text();
+        current_text.append('2');
+        ui->lineEdit_servo_num->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+    {
+        QString current_text = ui->lineEdit_servo_pos->text();
+        current_text.append('2');
+        ui->lineEdit_servo_pos->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+    {
+        QString current_text = ui->lineEdit_servo_speed->text();
+        current_text.append('2');
+        ui->lineEdit_servo_speed->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+    {
+        QString current_text = ui->lineEdit_delay->text();
+        current_text.append('2');
+        ui->lineEdit_delay->setText(current_text);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+
+void MainWindow::on_button_3_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+    {
+        QString current_text = ui->lineEdit_servo_num->text();
+        current_text.append('3');
+        ui->lineEdit_servo_num->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+    {
+        QString current_text = ui->lineEdit_servo_pos->text();
+        current_text.append('3');
+        ui->lineEdit_servo_pos->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+    {
+        QString current_text = ui->lineEdit_servo_speed->text();
+        current_text.append('3');
+        ui->lineEdit_servo_speed->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+    {
+        QString current_text = ui->lineEdit_delay->text();
+        current_text.append('3');
+        ui->lineEdit_delay->setText(current_text);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+
+void MainWindow::on_button_4_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+    {
+        QString current_text = ui->lineEdit_servo_num->text();
+        current_text.append('4');
+        ui->lineEdit_servo_num->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+    {
+        QString current_text = ui->lineEdit_servo_pos->text();
+        current_text.append('4');
+        ui->lineEdit_servo_pos->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+    {
+        QString current_text = ui->lineEdit_servo_speed->text();
+        current_text.append('4');
+        ui->lineEdit_servo_speed->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+    {
+        QString current_text = ui->lineEdit_delay->text();
+        current_text.append('4');
+        ui->lineEdit_delay->setText(current_text);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+
+void MainWindow::on_button_5_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+    {
+        QString current_text = ui->lineEdit_servo_num->text();
+        current_text.append('5');
+        ui->lineEdit_servo_num->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+    {
+        QString current_text = ui->lineEdit_servo_pos->text();
+        current_text.append('5');
+        ui->lineEdit_servo_pos->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+    {
+        QString current_text = ui->lineEdit_servo_speed->text();
+        current_text.append('5');
+        ui->lineEdit_servo_speed->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+    {
+        QString current_text = ui->lineEdit_delay->text();
+        current_text.append('5');
+        ui->lineEdit_delay->setText(current_text);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+
+void MainWindow::on_button_6_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+    {
+        QString current_text = ui->lineEdit_servo_num->text();
+        current_text.append('6');
+        ui->lineEdit_servo_num->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+    {
+        QString current_text = ui->lineEdit_servo_pos->text();
+        current_text.append('6');
+        ui->lineEdit_servo_pos->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+    {
+        QString current_text = ui->lineEdit_servo_speed->text();
+        current_text.append('6');
+        ui->lineEdit_servo_speed->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+    {
+        QString current_text = ui->lineEdit_delay->text();
+        current_text.append('6');
+        ui->lineEdit_delay->setText(current_text);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void MainWindow::on_button_7_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+    {
+        QString current_text = ui->lineEdit_servo_num->text();
+        current_text.append('7');
+        ui->lineEdit_servo_num->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+    {
+        QString current_text = ui->lineEdit_servo_pos->text();
+        current_text.append('7');
+        ui->lineEdit_servo_pos->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+    {
+        QString current_text = ui->lineEdit_servo_speed->text();
+        current_text.append('7');
+        ui->lineEdit_servo_speed->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+    {
+        QString current_text = ui->lineEdit_delay->text();
+        current_text.append('7');
+        ui->lineEdit_delay->setText(current_text);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void MainWindow::on_button_8_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+    {
+        QString current_text = ui->lineEdit_servo_num->text();
+        current_text.append('8');
+        ui->lineEdit_servo_num->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+    {
+        QString current_text = ui->lineEdit_servo_pos->text();
+        current_text.append('8');
+        ui->lineEdit_servo_pos->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+    {
+        QString current_text = ui->lineEdit_servo_speed->text();
+        current_text.append('8');
+        ui->lineEdit_servo_speed->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+    {
+        QString current_text = ui->lineEdit_delay->text();
+        current_text.append('8');
+        ui->lineEdit_delay->setText(current_text);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void MainWindow::on_button_9_clicked()
+{
+    switch(m_automatic_line_edit_select)
+    {
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
+    {
+        QString current_text = ui->lineEdit_servo_num->text();
+        current_text.append('9');
+        ui->lineEdit_servo_num->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
+    {
+        QString current_text = ui->lineEdit_servo_pos->text();
+        current_text.append('9');
+        ui->lineEdit_servo_pos->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
+    {
+        QString current_text = ui->lineEdit_servo_speed->text();
+        current_text.append('9');
+        ui->lineEdit_servo_speed->setText(current_text);
+        break;
+    }
+    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
+    {
+        QString current_text = ui->lineEdit_delay->text();
+        current_text.append('9');
+        ui->lineEdit_delay->setText(current_text);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+void MainWindow::check_edit_line_servo_num()
+{
+    int value = ui->lineEdit_servo_num->text().toInt();
+    if ((value < 1) || (value > 6))
+    {
+        ui->lineEdit_servo_num->clear();
+        ui->lineEdit_servo_num->setStyleSheet(m_line_edit_error_style_sheet);
+        m_is_servo_num_valid = false;
+    }
+    else
+    {
+        ui->lineEdit_servo_num->setStyleSheet(m_line_edit_success_style_sheet);
+        m_is_servo_num_valid = true;
+    }
+}
+
+void MainWindow::check_edit_line_servo_pos()
+{
+    int value = ui->lineEdit_servo_pos->text().toInt();
+    if ((value < 500) || (value > 2500))
+    {
+        ui->lineEdit_servo_pos->clear();
+        ui->lineEdit_servo_pos->setStyleSheet(m_line_edit_error_style_sheet);
+        m_is_servo_pos_valid = false;
+    }
+    else
+    {
+        ui->lineEdit_servo_pos->setStyleSheet(m_line_edit_success_style_sheet);
+        m_is_servo_pos_valid = true;
+    }
+}
+
+void MainWindow::check_edit_line_servo_speed()
+{
+    int value = ui->lineEdit_servo_speed->text().toInt();
+    if ((value < 1) || (value > 10))
+    {
+        ui->lineEdit_servo_speed->clear();
+        ui->lineEdit_servo_speed->setStyleSheet(m_line_edit_error_style_sheet);
+        m_is_servo_speed_valid = false;
+    }
+    else
+    {
+        ui->lineEdit_servo_speed->setStyleSheet(m_line_edit_success_style_sheet);
+        m_is_servo_speed_valid = true;
+    }
+}
+
+void MainWindow::check_edit_line_delay()
+{
+    int value = ui->lineEdit_delay->text().toInt();
+    if ((ui->lineEdit_delay->text() == "") || (value < 0) || (value > 10000))
+    {
+        ui->lineEdit_delay->clear();
+        ui->lineEdit_delay->setStyleSheet(m_line_edit_error_style_sheet);
+        m_is_delay_valid = false;
+    }
+    else
+    {
+        ui->lineEdit_delay->setStyleSheet(m_line_edit_success_style_sheet);
+        m_is_delay_valid = true;
+    }
+}
+
+void MainWindow::on_buton_add_step_clicked()
+{
+    check_edit_line_servo_num();
+    check_edit_line_servo_pos();
+    check_edit_line_servo_speed();
+    check_edit_line_delay();
+
+    if (m_is_servo_num_valid && m_is_servo_pos_valid && m_is_servo_speed_valid && m_is_delay_valid)
+    {
+        ++m_automatic_steps_count;
+        ui->table_servo_steps->setRowCount(m_automatic_steps_count);
+        QTableWidgetItem * item = new QTableWidgetItem();
+        item->setText(ui->lineEdit_servo_num->text());
+        ui->table_servo_steps->setItem(m_automatic_steps_count-1, 0, item);
+        item = new QTableWidgetItem();
+        item->setText(ui->lineEdit_servo_pos->text());
+        ui->table_servo_steps->setItem(m_automatic_steps_count-1, 1, item);
+        item = new QTableWidgetItem();
+        item->setText(ui->lineEdit_servo_speed->text());
+        ui->table_servo_steps->setItem(m_automatic_steps_count-1, 2, item);
+        item = new QTableWidgetItem();
+        item->setText(ui->lineEdit_delay->text());
+        ui->table_servo_steps->setItem(m_automatic_steps_count-1, 3, item);
+
+        clear_line_edits();
+    }
+}
+
+void MainWindow::clear_line_edits()
+{
+    ui->lineEdit_servo_num->clear();
+    ui->lineEdit_servo_num->setStyleSheet("");
+    ui->lineEdit_servo_pos->clear();
+    ui->lineEdit_servo_pos->setStyleSheet("");
+    ui->lineEdit_servo_speed->clear();
+    ui->lineEdit_servo_speed->setStyleSheet("");
+    ui->lineEdit_delay->clear();
+    ui->lineEdit_delay->setStyleSheet("");
+}
+
+void MainWindow::on_button_remove_step_clicked()
+{
+    if (ui->lineEdit_step_number->text() != "")
+    {
+        int row = ui->lineEdit_step_number->text().toInt()-1;
+        if (row >= 0 && row < ui->table_servo_steps->rowCount())
+        {
+            --m_automatic_steps_count;
+            ui->table_servo_steps->removeRow(row);
+            ui->lineEdit_step_number->clear();
+        }
+    }
+}
+
+void MainWindow::on_button_save_clicked()
+{
+    try
+    {
+        if(!std::filesystem::exists(m_automatic_file_path))
+        {
+            std::filesystem::create_directories(m_automatic_file_path);
+        }
+
+        const std::string file_name = ui->lineEdit_file_name->text().toStdString();
+
+        std::filesystem::path file_path = m_automatic_file_path / file_name;
+        std::ofstream file(file_path.string());
+
+        for (int i = 0; i < ui->table_servo_steps->rowCount(); ++i)
+        {
+            for (int j = 0; j < ui->table_servo_steps->columnCount(); ++j)
+            {
+                file << ui->table_servo_steps->item(i, j)->text().toStdString() << "\n";
+            }
+        }
+
+        ui->lineEdit_file_name->clear();
+        scan_automatic_files();
+    }
+    catch (const std::exception & error)
+    {
+        std::cout << error.what() << std::endl;
+    }
+}
+
+void MainWindow::on_button_load_clicked()
+{
+    try
+    {
+        if(std::filesystem::exists(m_automatic_file_path))
+        {
+            m_automatic_steps_count = 0;
+            ui->table_servo_steps->setRowCount(m_automatic_steps_count);
+            const std::string file_name = ui->list_automatic_files->currentItem()->text().toStdString();
+
+            std::cout << file_name << std::endl;
+
+            std::filesystem::path file_path = m_automatic_file_path / file_name;
+            std::ifstream file(file_path.string());
+
+            std::string data;
+
+            bool work = true;
+            while(work)
+            {
+                ++m_automatic_steps_count;
+                for (int i = 0; i < ui->table_servo_steps->columnCount(); ++i)
+                {
+                    file >> data;
+                    if (file.eof())
+                    {
+                        work = false;
+                        --m_automatic_steps_count;
+                        break;
+                    }
+                    else
+                    {
+                        ui->table_servo_steps->setRowCount(m_automatic_steps_count);
+                        QTableWidgetItem * item = new QTableWidgetItem;
+                        item->setText(QString::fromStdString(data));
+                        ui->table_servo_steps->setItem(m_automatic_steps_count-1, i, item);
+                    }
+                }
+            }
+        }
+    }
+    catch (const std::exception & error)
+    {
+        std::cout << error.what() << std::endl;
+    }
+}
+
+void MainWindow::scan_automatic_files()
+{
+    try
+    {
+        if(std::filesystem::exists(m_automatic_file_path))
+        {
+            ui->list_automatic_files->clear();
+            for (const auto & entry : std::filesystem::directory_iterator(m_automatic_file_path))
+            {
+                ui->list_automatic_files->addItem(QString::fromStdString(entry.path().filename().string()));
+            }
+        }
+    }
+    catch (const std::exception & error)
+    {
+        std::cout << error.what() << std::endl;
+    }
+}
+
+void MainWindow::on_radioButton_loop_toggled(bool checked)
+{
+    checked ? m_run_in_loop = true : m_run_in_loop = false;
+}
+
+
+void MainWindow::on_button_execute_clicked()
+{
+
 }
 

@@ -23,6 +23,7 @@ void LedManager::runProcess()
 
 void LedManager::signalCallbackHandler(int signum)
 {
+    LedHandler::signalCallbackHandler(signum);
     std::cout << "LedManager received signal: " << signum << std::endl;
     m_run_process = false;
 }

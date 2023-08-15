@@ -37,6 +37,8 @@ public:
 
     bool readShmemId();
 
+    static void signalCallbackHandler(int signum);
+
 private:
     bool m_is_owner;
     bool m_is_shmem_opened;
@@ -60,7 +62,12 @@ private:
 
     sem_t * m_writer_sem;
     sem_t * m_reader_sem;
+
+    static bool m_run_process;
 };
+
+template <typename T>
+bool ShmemHandler<T>::m_run_process = true;
 
 template <typename T>
 ShmemHandler<T>::ShmemHandler(const char * shmem_name, std::uint32_t data_size, bool is_owner) :
@@ -81,17 +88,17 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, std::uint32_t data_size, 
         m_writer_sem_name = m_writer_sem_prefix + m_shmem_name + m_identifier_num;
         m_reader_sem_name = m_reader_sem_prefix + m_shmem_name + m_identifier_num;
 
-        // createShmem();
-        while(!createShmem())
-        {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        };
+         createShmem();
+//        while(!createShmem() && m_run_process)
+//        {
+//            std::this_thread::sleep_for(std::chrono::seconds(1));
+//        };
     } else {
-        // openShmem();
-        while(!openShmem())
-        {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        };
+         openShmem();
+//        while(!openShmem() && m_run_process)
+//        {
+//            std::this_thread::sleep_for(std::chrono::seconds(1));
+//        };
     }
 }
 
@@ -312,6 +319,13 @@ bool ShmemHandler<T>::readShmemId()
         return 1;
     }
     return 0;
+}
+
+template <typename T>
+void ShmemHandler<T>::signalCallbackHandler(int signum)
+{
+    std::cout << "ShmemHandler received signal: " << signum << std::endl;
+    m_run_process = false;
 }
 
 } // shmem_wrapper

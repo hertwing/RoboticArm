@@ -291,6 +291,9 @@ void ServoManager::runProcess()
 
 void ServoManager::signalCallbackHandler(int signum)
 {
+    odin::shmem_wrapper::ShmemHandler<JoypadData>::signalCallbackHandler(signum);
+    odin::shmem_wrapper::ShmemHandler<ws2811_led_t>::signalCallbackHandler(signum);
+    odin::shmem_wrapper::ShmemHandler<OdinControlSelection>::signalCallbackHandler(signum);
     std::cout << "ServoManager received signal: " << signum << std::endl;
     m_run_process = false;
 }

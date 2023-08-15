@@ -6,6 +6,8 @@
 #include <chrono>
 #include <thread>
 
+bool LedHandler::m_run_process = true;
+
 LedHandler::LedHandler()
 {
     m_ledstring =
@@ -102,4 +104,11 @@ void LedHandler::updateLedColors()
     {
         std::cout << "Couldn't read from shmem." << std::endl;
     }
+}
+
+void LedHandler::signalCallbackHandler(int signum)
+{
+    odin::shmem_wrapper::ShmemHandler<ws2811_led_t>::signalCallbackHandler(signum);
+    std::cout << "LedHandler received signal: " << signum << std::endl;
+    m_run_process = false;
 }

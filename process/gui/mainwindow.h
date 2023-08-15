@@ -1,24 +1,27 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include "InetCommData.h"
-#include "odin/diagnostic_handler/DataTypes.h"
-#include "odin/shmem_wrapper/DataTypes.h"
-#include "odin/shmem_wrapper/ShmemHandler.hpp"
-
 #include <QBarCategoryAxis>
 #include <QBarSeries>
 #include <QBarSet>
 #include <QChart>
 #include <QChartView>
+#include <QLineEdit>
 #include <QLineSeries>
 #include <QMainWindow>
 #include <QPieSeries>
 #include <QPieSlice>
 #include <QValueAxis>
 
-#include <memory>
 #include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <list>
+
+#include "InetCommData.h"
+#include "odin/diagnostic_handler/DataTypes.h"
+#include "odin/shmem_wrapper/DataTypes.h"
+#include "odin/shmem_wrapper/ShmemHandler.hpp"
 
 using namespace odin::diagnostic_handler;
 
@@ -45,6 +48,15 @@ enum class ChartSelect {
     LATENCY
 };
 
+enum class AutomaticLineEditSelect
+{
+    SERVO_POS,
+    SERVO_NUM,
+    SERVO_SPEED,
+    DELAY,
+    NONE
+};
+
 static constexpr std::uint8_t INT_CHARTS_COUNT = 3;
 static constexpr std::uint8_t CHART_BINS = 10;
 static constexpr double LATENCY_MAX = 20.0;
@@ -59,18 +71,34 @@ public:
 
 private slots:
     void on_button_exit_clicked();
-
     void on_button_joypad_clicked();
-
     void on_button_diagnostic_clicked();
-
     void on_button_rpi_switch_clicked();
-
     void diagnosticTimerSlot();
-
     void on_button_automatic_clicked();
+    void on_radioButton_servo_num_toggled(bool checked);
+    void on_radioButton_servo_pos_toggled(bool checked);
+    void on_radioButton_servo_speed_toggled(bool checked);
+    void on_radioButton_delay_toggled(bool checked);
+    void on_button_clear_clicked();
+    void on_button_del_clicked();
+    void on_button_0_clicked();
+    void on_button_1_clicked();
+    void on_button_2_clicked();
+    void on_button_3_clicked();
+    void on_button_4_clicked();
+    void on_button_5_clicked();
+    void on_button_6_clicked();
+    void on_button_7_clicked();
+    void on_button_8_clicked();
+    void on_button_9_clicked();
+    void on_buton_add_step_clicked();
+    void on_button_remove_step_clicked();
+    void on_button_save_clicked();
+    void on_button_load_clicked();
+    void on_radioButton_loop_toggled(bool checked);
 
-    void on_dial_step_sliderMoved(int position);
+    void on_button_execute_clicked();
 
 private:
     void draw_menu();
@@ -82,6 +110,12 @@ private:
     void draw_charts();
     void show_automatic();
     void hide_automatic();
+    void check_edit_line_servo_num();
+    void check_edit_line_servo_pos();
+    void check_edit_line_servo_speed();
+    void check_edit_line_delay();
+    void clear_line_edits();
+    void scan_automatic_files();
 
 private:
     Ui::MainWindow * ui;
@@ -90,6 +124,20 @@ private:
     bool m_diagnostic_enabled;
     bool m_diagnostic_board_selected;
     bool m_chart_swap;
+
+    bool m_is_servo_num_valid;
+    bool m_is_servo_pos_valid;
+    bool m_is_servo_speed_valid;
+    bool m_is_delay_valid;
+    bool m_run_in_loop;
+
+    std::list<OdinServoStep> m_automatic_steps;
+
+    std::filesystem::path m_automatic_file_path;
+
+    std::uint64_t m_automatic_steps_count;
+
+    std::uint8_t m_automatic_line_edit_select;
 
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_gui_diagnostic_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_arm_diagnostic_shmem_handler;
@@ -146,7 +194,7 @@ private:
         "padding: 3; \
         background-color: rgb(255, 155, 0); \
         image: url(:/icons/resources/automatic_icon.png);";
-        const QString m_disabled_automatic_style_sheet =
+    const QString m_disabled_automatic_style_sheet =
         "padding: 3; \
         background-color: rgb(204, 0, 0); \
         image: url(:/icons/resources/automatic_icon.png);";
@@ -164,5 +212,9 @@ private:
         "border-top: 1 solid rgb(114, 159, 207);";
     const QString m_diagnostic_label_style_sheet =
         "border: none;";
+    const QString m_line_edit_error_style_sheet =
+        "background-color: rgb(239, 41, 41);";
+    const QString m_line_edit_success_style_sheet =
+        "background-color: rgb(115, 210, 22);";
 };
 #endif // MAINWINDOW_H

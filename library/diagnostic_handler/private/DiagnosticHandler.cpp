@@ -121,7 +121,8 @@ void DiagnosticHandler::writeDiagnostic(const std::string & board_name)
 
 void DiagnosticHandler::signalCallbackHandler(int signum)
 {
-    std::cout << "JoypadHandler received signal: " << signum << std::endl;
+    odin::shmem_wrapper::ShmemHandler<DiagnosticData>::signalCallbackHandler(signum);
+    std::cout << "DiagnosticHandler received signal: " << signum << std::endl;
     m_run_process = false;
 }
 

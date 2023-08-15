@@ -41,4 +41,12 @@ struct OdinControlSelection
     std::uint8_t control_selection;
 };
 
+struct OdinServoStep
+{
+    std::uint8_t servo_num;
+    std::uint16_t position;
+    std::uint64_t delay;
+    std::uint8_t speed;
+};
+
 #endif // INETCOMMDATA_H

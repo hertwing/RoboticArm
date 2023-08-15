@@ -29,7 +29,7 @@ public:
     void getDiagnosticData(const std::string & board_name);
     void writeDiagnostic(const std::string & board_name);
 
-    void signalCallbackHandler(int signum);
+    static void signalCallbackHandler(int signum);
 private:
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_shmem_handler;
     std::uint32_t m_cpu_usage;

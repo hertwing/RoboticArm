@@ -77,18 +77,12 @@ void GuiGateway::handleGuiDiagnostic(GuiGateway * gg)
         sizeof(odin::diagnostic_handler::DiagnosticData), DIAGNOSTIC_SOCKET_PORT);
     while (gg->m_run_process)
     {
-        // std::cout << "Reading data from server." << std::endl;
         gg->m_diagnostic_comm_handler->serverRead(&(gg->m_remote_diagnostic));
         if (gg->m_remote_diagnostic != gg->m_previous_remote_diagnostic)
         {
             gg->m_diagnostic_shmem_handler->shmemWrite(&(gg->m_remote_diagnostic));
             gg->m_previous_remote_diagnostic = gg->m_remote_diagnostic;
         }
-        // std::cout << gg->m_remote_diagnostic.cpu_temp << " "
-        //         << gg->m_remote_diagnostic.cpu_usage << " "
-        //         << gg->m_remote_diagnostic.ram_usage << " "
-        //         << gg->m_remote_diagnostic.latency << std::endl;
-        // std::cout << "Writing to shmem." << std::endl;
         
         // TODO: change magic number to settings constants for sleeps
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
@@ -107,15 +101,10 @@ void GuiGateway::handleGuiControlSelection(GuiGateway * gg)
         {
             if(gg->m_control_selection_shmem_handler->shmemRead(&(gg->m_control_selection)))
             {
-                if (gg->m_control_selection != gg->m_previous_control_selection)
-                {
-                    std::cout << "Control selection changed. Writing to client." << std::endl;
-                    gg->m_control_selection_comm_handler->serverWrite(&(gg->m_control_selection));
-                    gg->m_previous_control_selection = gg->m_control_selection;
-                }
+                gg->m_control_selection_comm_handler->serverWrite(&(gg->m_control_selection));
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }
 
@@ -127,7 +116,6 @@ void GuiGateway::handleArmDiagnostic(GuiGateway * gg)
         sizeof(odin::diagnostic_handler::DiagnosticData), DIAGNOSTIC_SOCKET_PORT, ROBOTIC_GUI_IP);
     while (gg->m_run_process)
     {
-        // std::cout << "Reading from shmem." << std::endl;
         if (gg->m_diagnostic_shmem_handler->openShmem())
         {
             if (gg->m_diagnostic_shmem_handler->shmemRead(&(gg->m_remote_diagnostic)))
@@ -139,11 +127,6 @@ void GuiGateway::handleArmDiagnostic(GuiGateway * gg)
                 }
             }
         }
-        // std::cout << gg->m_remote_diagnostic.cpu_temp << " "
-        //     << gg->m_remote_diagnostic.cpu_usage << " "
-        //     << gg->m_remote_diagnostic.ram_usage << " "
-        //     << gg->m_remote_diagnostic.latency << std::endl;
-        // std::cout << "Writing to server." << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
 }
@@ -160,7 +143,6 @@ void GuiGateway::handleArmControlSelection(GuiGateway * gg)
         gg->m_control_selection_comm_handler->clientRead(&(gg->m_control_selection));
         if (gg->m_control_selection != gg->m_previous_control_selection)
         {
-            std::cout << "Control selection changed." << std::endl;
             gg->m_control_selection_shmem_handler->shmemWrite(&(gg->m_control_selection));
             gg->m_previous_control_selection = gg->m_control_selection;
         }
@@ -171,6 +153,10 @@ void GuiGateway::handleArmControlSelection(GuiGateway * gg)
 
 void GuiGateway::signalCallbackHandler(int signum)
 {
+    InetCommHandler<DiagnosticData>::signalCallbackHandler(signum);
+    InetCommHandler<OdinControlSelection>::signalCallbackHandler(signum);
+    ShmemHandler<DiagnosticData>::signalCallbackHandler(signum);
+    ShmemHandler<OdinControlSelection>::signalCallbackHandler(signum);
     std::cout << "GuiGateway received signal: " << signum << std::endl;
     m_run_process = false;
 }

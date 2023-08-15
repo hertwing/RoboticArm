@@ -1,6 +1,8 @@
 #ifndef SHMEMHANDLER_DATATYPES_H
 #define SHMEMHANDLER_DATATYPES_H
 
+#include <filesystem>
+
 namespace odin
 {
 namespace shmem_wrapper
@@ -16,6 +18,7 @@ struct DataTypes {
     static constexpr const char * DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME = "DiagnosticFromRemoteShmem";
     static constexpr const char * CONTROL_SELECT_SHMEM_NAME = "ControlSelectShmem";
 
+    static constexpr const char * AUTOMATIC_FILES_PATH = "/odin/automatic_files";
 };
 
 } // shmem_wrapper
