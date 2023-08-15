@@ -28,11 +28,13 @@ public:
     void runOnGui();
     void runOnArm();
 
-    static void handleGuiDiagnostic(GuiGateway *);
-    static void handleGuiControlSelection(GuiGateway *);
+    static void handleGuiDiagnostic(GuiGateway * gg);
+    static void handleGuiControlSelection(GuiGateway * gg);
+    static void handleGuiAutomaticSteps(GuiGateway * gg);
 
     static void handleArmDiagnostic(GuiGateway * gg);
     static void handleArmControlSelection(GuiGateway * gg);
+    static void handleArmAutomaticSteps(GuiGateway * gg);
 
     static bool m_run_process;
     static void signalCallbackHandler(int signum);
@@ -41,6 +43,10 @@ private:
     std::unique_ptr<ShmemHandler<DiagnosticData>> m_diagnostic_shmem_handler;
     std::unique_ptr<InetCommHandler<OdinControlSelection>> m_control_selection_comm_handler;
     std::unique_ptr<ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
+    std::unique_ptr<ShmemHandler<OdinAutomaticExecuteData>> m_automatic_execute_shmem_handler;
+    std::unique_ptr<ShmemHandler<OdinAutomaticConfirm>> m_automatic_execute_confirm_shmem_handler;
+    std::unique_ptr<ShmemHandler<OdinAutomaticStepConfirm>> m_automatic_step_confirm_shmem_handler;
+    std::unique_ptr<ShmemHandler<OdinServoStep>> m_automatic_step_shmem_handler;
     DiagnosticData m_remote_diagnostic;
     DiagnosticData m_previous_remote_diagnostic;
     OdinControlSelection m_control_selection;
@@ -48,6 +54,7 @@ private:
 
     std::thread m_diagnostic_thread;
     std::thread m_control_selection_thread;
+    std::thread m_automatic_data_thread;
 };
 
 } // gui_gateway

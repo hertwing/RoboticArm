@@ -20,6 +20,6 @@ target_include_directories(library_${PROJECT_NAME}
 
 set_target_properties(library_${PROJECT_NAME} PROPERTIES LINKER_LANGUAGE CXX)
 
-# target_link_libraries(library_${PROJECT_NAME}
-#     PUBLIC library_diagnostic_handler
-#     )
+ target_link_libraries(library_${PROJECT_NAME}
+     PUBLIC stdc++fs
+     )

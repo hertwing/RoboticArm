@@ -34,13 +34,26 @@ MainWindow::MainWindow(QWidget *parent)
     scan_automatic_files();
 
     m_automatic_steps_count = ui->table_servo_steps->rowCount();
-
+    // Shmem readers and writers
+    m_automatic_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_STEP_SHMEM_NAME, sizeof(OdinServoStep), true);
+    m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>>(
+        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), true);
+    m_automatic_execute_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticExecuteData>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_SHMEM_NAME, sizeof(OdinAutomaticExecuteData), true);
     m_gui_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), false);
     m_arm_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME, sizeof(DiagnosticData), false);
-    m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>>(
-        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), true);
+    m_automatic_execute_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticConfirm>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_GATEWAY_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticConfirm), false);
+    m_automatic_step_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticStepConfirm>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_STEP_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticStepConfirm), false);
+
+    // Fill shmem data with initial values
+    // TODO: write a method for that
+    OdinServoStep tmp_step;
+    m_automatic_step_shmem_handler->shmemWrite(&tmp_step);
 
     m_diagnostic_timer = new QTimer(this);
     m_diagnostic_timer->start(300);
@@ -416,7 +429,6 @@ void MainWindow::on_radioButton_servo_pos_toggled(bool checked)
     }
 }
 
-
 void MainWindow::on_radioButton_servo_speed_toggled(bool checked)
 {
     if (checked)
@@ -499,372 +511,83 @@ void MainWindow::on_button_del_clicked()
 
 void MainWindow::on_button_0_clicked()
 {
-    switch(m_automatic_line_edit_select)
-    {
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
-    {
-        QString current_text = ui->lineEdit_servo_num->text();
-        current_text.append('0');
-        ui->lineEdit_servo_num->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
-    {
-        QString current_text = ui->lineEdit_servo_pos->text();
-        current_text.append('0');
-        ui->lineEdit_servo_pos->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
-    {
-        QString current_text = ui->lineEdit_servo_speed->text();
-        current_text.append('0');
-        ui->lineEdit_servo_speed->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
-    {
-        QString current_text = ui->lineEdit_delay->text();
-        current_text.append('0');
-        ui->lineEdit_delay->setText(current_text);
-        break;
-    }
-    default:
-        break;
-    }
+    handle_num_buttons('0');
 }
-
 
 void MainWindow::on_button_1_clicked()
 {
-    switch(m_automatic_line_edit_select)
-    {
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
-    {
-        QString current_text = ui->lineEdit_servo_num->text();
-        current_text.append('1');
-        ui->lineEdit_servo_num->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
-    {
-        QString current_text = ui->lineEdit_servo_pos->text();
-        current_text.append('1');
-        ui->lineEdit_servo_pos->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
-    {
-        QString current_text = ui->lineEdit_servo_speed->text();
-        current_text.append('1');
-        ui->lineEdit_servo_speed->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
-    {
-        QString current_text = ui->lineEdit_delay->text();
-        current_text.append('1');
-        ui->lineEdit_delay->setText(current_text);
-        break;
-    }
-    default:
-        break;
-    }
+    handle_num_buttons('1');
 }
-
 
 void MainWindow::on_button_2_clicked()
 {
-    switch(m_automatic_line_edit_select)
-    {
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
-    {
-        QString current_text = ui->lineEdit_servo_num->text();
-        current_text.append('2');
-        ui->lineEdit_servo_num->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
-    {
-        QString current_text = ui->lineEdit_servo_pos->text();
-        current_text.append('2');
-        ui->lineEdit_servo_pos->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
-    {
-        QString current_text = ui->lineEdit_servo_speed->text();
-        current_text.append('2');
-        ui->lineEdit_servo_speed->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
-    {
-        QString current_text = ui->lineEdit_delay->text();
-        current_text.append('2');
-        ui->lineEdit_delay->setText(current_text);
-        break;
-    }
-    default:
-        break;
-    }
+    handle_num_buttons('2');
 }
-
 
 void MainWindow::on_button_3_clicked()
 {
-    switch(m_automatic_line_edit_select)
-    {
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
-    {
-        QString current_text = ui->lineEdit_servo_num->text();
-        current_text.append('3');
-        ui->lineEdit_servo_num->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
-    {
-        QString current_text = ui->lineEdit_servo_pos->text();
-        current_text.append('3');
-        ui->lineEdit_servo_pos->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
-    {
-        QString current_text = ui->lineEdit_servo_speed->text();
-        current_text.append('3');
-        ui->lineEdit_servo_speed->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
-    {
-        QString current_text = ui->lineEdit_delay->text();
-        current_text.append('3');
-        ui->lineEdit_delay->setText(current_text);
-        break;
-    }
-    default:
-        break;
-    }
+    handle_num_buttons('3');
 }
-
 
 void MainWindow::on_button_4_clicked()
 {
-    switch(m_automatic_line_edit_select)
-    {
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
-    {
-        QString current_text = ui->lineEdit_servo_num->text();
-        current_text.append('4');
-        ui->lineEdit_servo_num->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
-    {
-        QString current_text = ui->lineEdit_servo_pos->text();
-        current_text.append('4');
-        ui->lineEdit_servo_pos->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
-    {
-        QString current_text = ui->lineEdit_servo_speed->text();
-        current_text.append('4');
-        ui->lineEdit_servo_speed->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
-    {
-        QString current_text = ui->lineEdit_delay->text();
-        current_text.append('4');
-        ui->lineEdit_delay->setText(current_text);
-        break;
-    }
-    default:
-        break;
-    }
+    handle_num_buttons('4');
 }
-
 
 void MainWindow::on_button_5_clicked()
 {
-    switch(m_automatic_line_edit_select)
-    {
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
-    {
-        QString current_text = ui->lineEdit_servo_num->text();
-        current_text.append('5');
-        ui->lineEdit_servo_num->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
-    {
-        QString current_text = ui->lineEdit_servo_pos->text();
-        current_text.append('5');
-        ui->lineEdit_servo_pos->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
-    {
-        QString current_text = ui->lineEdit_servo_speed->text();
-        current_text.append('5');
-        ui->lineEdit_servo_speed->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
-    {
-        QString current_text = ui->lineEdit_delay->text();
-        current_text.append('5');
-        ui->lineEdit_delay->setText(current_text);
-        break;
-    }
-    default:
-        break;
-    }
+    handle_num_buttons('5');
 }
-
 
 void MainWindow::on_button_6_clicked()
 {
-    switch(m_automatic_line_edit_select)
-    {
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
-    {
-        QString current_text = ui->lineEdit_servo_num->text();
-        current_text.append('6');
-        ui->lineEdit_servo_num->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
-    {
-        QString current_text = ui->lineEdit_servo_pos->text();
-        current_text.append('6');
-        ui->lineEdit_servo_pos->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
-    {
-        QString current_text = ui->lineEdit_servo_speed->text();
-        current_text.append('6');
-        ui->lineEdit_servo_speed->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
-    {
-        QString current_text = ui->lineEdit_delay->text();
-        current_text.append('6');
-        ui->lineEdit_delay->setText(current_text);
-        break;
-    }
-    default:
-        break;
-    }
+    handle_num_buttons('6');
 }
 
 void MainWindow::on_button_7_clicked()
 {
-    switch(m_automatic_line_edit_select)
-    {
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
-    {
-        QString current_text = ui->lineEdit_servo_num->text();
-        current_text.append('7');
-        ui->lineEdit_servo_num->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
-    {
-        QString current_text = ui->lineEdit_servo_pos->text();
-        current_text.append('7');
-        ui->lineEdit_servo_pos->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
-    {
-        QString current_text = ui->lineEdit_servo_speed->text();
-        current_text.append('7');
-        ui->lineEdit_servo_speed->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
-    {
-        QString current_text = ui->lineEdit_delay->text();
-        current_text.append('7');
-        ui->lineEdit_delay->setText(current_text);
-        break;
-    }
-    default:
-        break;
-    }
+    handle_num_buttons('7');
 }
 
 void MainWindow::on_button_8_clicked()
 {
-    switch(m_automatic_line_edit_select)
-    {
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
-    {
-        QString current_text = ui->lineEdit_servo_num->text();
-        current_text.append('8');
-        ui->lineEdit_servo_num->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
-    {
-        QString current_text = ui->lineEdit_servo_pos->text();
-        current_text.append('8');
-        ui->lineEdit_servo_pos->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
-    {
-        QString current_text = ui->lineEdit_servo_speed->text();
-        current_text.append('8');
-        ui->lineEdit_servo_speed->setText(current_text);
-        break;
-    }
-    case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
-    {
-        QString current_text = ui->lineEdit_delay->text();
-        current_text.append('8');
-        ui->lineEdit_delay->setText(current_text);
-        break;
-    }
-    default:
-        break;
-    }
+    handle_num_buttons('8');
 }
 
 void MainWindow::on_button_9_clicked()
+{
+    handle_num_buttons('9');
+}
+
+void MainWindow::handle_num_buttons(char num)
 {
     switch(m_automatic_line_edit_select)
     {
     case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM):
     {
         QString current_text = ui->lineEdit_servo_num->text();
-        current_text.append('9');
+        current_text.append(num);
         ui->lineEdit_servo_num->setText(current_text);
         break;
     }
     case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS):
     {
         QString current_text = ui->lineEdit_servo_pos->text();
-        current_text.append('9');
+        current_text.append(num);
         ui->lineEdit_servo_pos->setText(current_text);
         break;
     }
     case static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED):
     {
         QString current_text = ui->lineEdit_servo_speed->text();
-        current_text.append('9');
+        current_text.append(num);
         ui->lineEdit_servo_speed->setText(current_text);
         break;
     }
     case static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY):
     {
         QString current_text = ui->lineEdit_delay->text();
-        current_text.append('9');
+        current_text.append(num);
         ui->lineEdit_delay->setText(current_text);
         break;
     }
@@ -946,22 +669,26 @@ void MainWindow::on_buton_add_step_clicked()
 
     if (m_is_servo_num_valid && m_is_servo_pos_valid && m_is_servo_speed_valid && m_is_delay_valid)
     {
-        ++m_automatic_steps_count;
-        ui->table_servo_steps->setRowCount(m_automatic_steps_count);
-        QTableWidgetItem * item = new QTableWidgetItem();
-        item->setText(ui->lineEdit_servo_num->text());
-        ui->table_servo_steps->setItem(m_automatic_steps_count-1, 0, item);
-        item = new QTableWidgetItem();
-        item->setText(ui->lineEdit_servo_pos->text());
-        ui->table_servo_steps->setItem(m_automatic_steps_count-1, 1, item);
-        item = new QTableWidgetItem();
-        item->setText(ui->lineEdit_servo_speed->text());
-        ui->table_servo_steps->setItem(m_automatic_steps_count-1, 2, item);
-        item = new QTableWidgetItem();
-        item->setText(ui->lineEdit_delay->text());
-        ui->table_servo_steps->setItem(m_automatic_steps_count-1, 3, item);
 
-        clear_line_edits();
+        if (m_automatic_steps_count < 1000)
+        {
+            ++m_automatic_steps_count;
+            ui->table_servo_steps->setRowCount(m_automatic_steps_count);
+            QTableWidgetItem * item = new QTableWidgetItem();
+            item->setText(ui->lineEdit_servo_num->text());
+            ui->table_servo_steps->setItem(m_automatic_steps_count-1, 0, item);
+            item = new QTableWidgetItem();
+            item->setText(ui->lineEdit_servo_pos->text());
+            ui->table_servo_steps->setItem(m_automatic_steps_count-1, 1, item);
+            item = new QTableWidgetItem();
+            item->setText(ui->lineEdit_servo_speed->text());
+            ui->table_servo_steps->setItem(m_automatic_steps_count-1, 2, item);
+            item = new QTableWidgetItem();
+            item->setText(ui->lineEdit_delay->text());
+            ui->table_servo_steps->setItem(m_automatic_steps_count-1, 3, item);
+
+            clear_line_edits();
+        }
     }
 }
 
@@ -1015,6 +742,7 @@ void MainWindow::on_button_save_clicked()
 
         ui->lineEdit_file_name->clear();
         scan_automatic_files();
+        file.close();
     }
     catch (const std::exception & error)
     {
@@ -1061,6 +789,7 @@ void MainWindow::on_button_load_clicked()
                     }
                 }
             }
+            file.close();
         }
     }
     catch (const std::exception & error)
@@ -1073,7 +802,7 @@ void MainWindow::scan_automatic_files()
 {
     try
     {
-        if(std::filesystem::exists(m_automatic_file_path))
+        if (std::filesystem::exists(m_automatic_file_path))
         {
             ui->list_automatic_files->clear();
             for (const auto & entry : std::filesystem::directory_iterator(m_automatic_file_path))
@@ -1093,9 +822,77 @@ void MainWindow::on_radioButton_loop_toggled(bool checked)
     checked ? m_run_in_loop = true : m_run_in_loop = false;
 }
 
-
 void MainWindow::on_button_execute_clicked()
 {
-
+    OdinServoStep servo_step;
+    OdinAutomaticStepConfirm servo_step_confirm;
+    OdinAutomaticConfirm automatic_confirm;
+    OdinAutomaticExecuteData automatic_data;
+    automatic_data.run = true;
+    automatic_data.run_in_loop = m_run_in_loop;
+    // TODO: Write error handling
+    while (!m_automatic_execute_shmem_handler->shmemWrite(&automatic_data)){};
+    bool confirm = false;
+    while (!confirm)
+    {
+        m_automatic_execute_confirm_shmem_handler->shmemRead(&automatic_confirm);
+        if (automatic_confirm.confirm == true)
+        {
+            confirm = true;
+        }
+        else
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    bool stop_sending_steps = false;
+    while (!stop_sending_steps)
+    {
+        for (int i = 0; i < ui->table_servo_steps->rowCount(); ++i)
+        {
+            std::cout << "Writing data" << std::endl;
+            servo_step.step_num = i;
+            servo_step.servo_num = ui->table_servo_steps->item(i, 0)->text().toInt();
+            servo_step.position = ui->table_servo_steps->item(i, 1)->text().toInt();
+            servo_step.speed = ui->table_servo_steps->item(i, 2)->text().toInt();
+            servo_step.delay = ui->table_servo_steps->item(i, 3)->text().toInt();
+            while (!m_automatic_step_shmem_handler->shmemWrite(&servo_step));
+            bool confirm_step = false;
+            while (!confirm_step)
+            {
+                if (m_automatic_step_confirm_shmem_handler->openShmem())
+                {
+                    if (m_automatic_step_confirm_shmem_handler->shmemRead(&servo_step_confirm))
+                    {
+                        if (servo_step_confirm.step_num == i)
+                        {
+                            std::cout << "Confirm read" << std::endl;
+                            confirm_step = true;
+                        }
+                        else
+                        {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        }
+                    }
+                }
+            }
+        }
+        stop_sending_steps = true;
+        std::cout << "Sending steps finished." << std::endl;
+    }
+    automatic_data.run = false;
+    while (!m_automatic_execute_shmem_handler->shmemWrite(&automatic_data)){};
+    confirm = false;
+    while (!confirm)
+    {
+        m_automatic_execute_confirm_shmem_handler->shmemRead(&automatic_confirm);
+        if (automatic_confirm.confirm == true)
+        {
+            confirm = true;
+        }
+        else
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
 }
-

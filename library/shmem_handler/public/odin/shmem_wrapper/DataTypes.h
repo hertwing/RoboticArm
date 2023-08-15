@@ -17,6 +17,10 @@ struct DataTypes {
     static constexpr const char * DIAGNOSTIC_SHMEM_NAME = "DiagnosticShmem";
     static constexpr const char * DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME = "DiagnosticFromRemoteShmem";
     static constexpr const char * CONTROL_SELECT_SHMEM_NAME = "ControlSelectShmem";
+    static constexpr const char * AUTOMATIC_EXECUTE_SHMEM_NAME = "AutomaticExecuteShmem";
+    static constexpr const char * AUTOMATIC_EXECUTE_GATEWAY_CONFIRM_SHMEM_NAME = "AutomaticExecuteConfirmShmem";
+    static constexpr const char * AUTOMATIC_EXECUTE_STEP_CONFIRM_SHMEM_NAME = "AutomaticStepConfirmShmem";
+    static constexpr const char * AUTOMATIC_STEP_SHMEM_NAME = "AutomaticStepShmem";
 
     static constexpr const char * AUTOMATIC_FILES_PATH = "/odin/automatic_files";
 };

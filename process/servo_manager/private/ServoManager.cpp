@@ -256,7 +256,7 @@ void ServoManager::updateLedColors(std::uint8_t led_options)
         case LedOption::AUTOMATIC:
             for (int i = 0; i < led_handler::LED_COUNT; ++i)
             {
-                m_led_color_status[i] = led_handler::LED_COLOR_GREEN;
+                m_led_color_status[i] = led_handler::LED_COLOR_YELLOW;
             }
             m_led_shmem_handler->shmemWrite(m_led_color_status);
             break;

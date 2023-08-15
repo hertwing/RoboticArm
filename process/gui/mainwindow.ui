@@ -569,6 +569,26 @@ opacity: 0.1;</string>
              <item row="0" column="0">
               <widget class="QWidget" name="widget_automatic" native="true">
                <layout class="QGridLayout" name="gridLayout_13">
+                <item row="0" column="4">
+                 <widget class="QPushButton" name="button_execute">
+                  <property name="styleSheet">
+                   <string notr="true">background-color: rgb(245, 121, 0);</string>
+                  </property>
+                  <property name="text">
+                   <string>Execute</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="5">
+                 <widget class="QPushButton" name="pushButton">
+                  <property name="styleSheet">
+                   <string notr="true">background-color: rgb(164, 0, 0);</string>
+                  </property>
+                  <property name="text">
+                   <string>Stop</string>
+                  </property>
+                 </widget>
+                </item>
                 <item row="0" column="2">
                  <widget class="QRadioButton" name="radioButton_loop">
                   <property name="text">
@@ -576,7 +596,20 @@ opacity: 0.1;</string>
                   </property>
                  </widget>
                 </item>
-                <item row="1" column="2" colspan="4">
+                <item row="0" column="7">
+                 <spacer name="horizontalSpacer">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+                <item row="2" column="2" colspan="7">
                  <layout class="QGridLayout" name="gridLayout_14" columnstretch="3,1">
                   <property name="leftMargin">
                    <number>0</number>
@@ -1402,26 +1435,10 @@ color: rgb(238, 238, 236)</string>
                   </item>
                  </layout>
                 </item>
-                <item row="0" column="5">
-                 <spacer name="horizontalSpacer">
-                  <property name="orientation">
-                   <enum>Qt::Horizontal</enum>
-                  </property>
-                  <property name="sizeHint" stdset="0">
-                   <size>
-                    <width>40</width>
-                    <height>20</height>
-                   </size>
-                  </property>
-                 </spacer>
-                </item>
-                <item row="0" column="4">
-                 <widget class="QPushButton" name="button_execute">
-                  <property name="styleSheet">
-                   <string notr="true">background-color: rgb(245, 121, 0);</string>
-                  </property>
+                <item row="0" column="6">
+                 <widget class="QLabel" name="label_2">
                   <property name="text">
-                   <string>Execute</string>
+                   <string>Maximum steps: 1000</string>
                   </property>
                  </widget>
                 </item>

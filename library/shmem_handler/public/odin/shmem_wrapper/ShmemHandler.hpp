@@ -88,17 +88,17 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, std::uint32_t data_size, 
         m_writer_sem_name = m_writer_sem_prefix + m_shmem_name + m_identifier_num;
         m_reader_sem_name = m_reader_sem_prefix + m_shmem_name + m_identifier_num;
 
-         createShmem();
-//        while(!createShmem() && m_run_process)
-//        {
-//            std::this_thread::sleep_for(std::chrono::seconds(1));
-//        };
+        //  createShmem();
+       while(!createShmem() && m_run_process)
+       {
+           std::this_thread::sleep_for(std::chrono::seconds(1));
+       };
     } else {
-         openShmem();
-//        while(!openShmem() && m_run_process)
-//        {
-//            std::this_thread::sleep_for(std::chrono::seconds(1));
-//        };
+        //  openShmem();
+       while(!openShmem() && m_run_process)
+       {
+           std::this_thread::sleep_for(std::chrono::seconds(1));
+       };
     }
 }
 

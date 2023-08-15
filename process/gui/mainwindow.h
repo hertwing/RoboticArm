@@ -97,7 +97,6 @@ private slots:
     void on_button_save_clicked();
     void on_button_load_clicked();
     void on_radioButton_loop_toggled(bool checked);
-
     void on_button_execute_clicked();
 
 private:
@@ -116,6 +115,7 @@ private:
     void check_edit_line_delay();
     void clear_line_edits();
     void scan_automatic_files();
+    void handle_num_buttons(char num);
 
 private:
     Ui::MainWindow * ui;
@@ -142,6 +142,11 @@ private:
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_gui_diagnostic_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_arm_diagnostic_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinAutomaticExecuteData>> m_automatic_execute_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinAutomaticConfirm>> m_automatic_execute_confirm_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinAutomaticStepConfirm>> m_automatic_step_confirm_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinServoStep>> m_automatic_step_shmem_handler;
+
     DiagnosticData m_gui_diagnostic_data;
     DiagnosticData m_rak_diagnostic_data;
 

@@ -2,10 +2,10 @@
 #define INETCOMMDATA_H
 
 #include <cstdint>
+#include <filesystem>
 #include <string>
-// #include "odin/diagnostic_handler/DataTypes.h"
 
-// TODO: Create a script to atumatically assing board IPs when env instal
+// TODO: Create a script to atumatically assing board IPs when env install
 const std::string ROBOTIC_ARM_IP = "192.168.1.24";
 const std::string ROBOTIC_GUI_IP = "192.168.1.41";
 
@@ -43,10 +43,35 @@ struct OdinControlSelection
 
 struct OdinServoStep
 {
+    OdinServoStep()
+    {
+        step_num = -1;
+        servo_num = 0;
+        position = 0;
+        delay = 0;
+        speed = 0;
+    }
+    int step_num;
     std::uint8_t servo_num;
     std::uint16_t position;
     std::uint64_t delay;
     std::uint8_t speed;
+};
+
+struct OdinAutomaticExecuteData
+{
+    bool run;
+    bool run_in_loop;
+};
+
+struct OdinAutomaticConfirm
+{
+    bool confirm;
+};
+
+struct OdinAutomaticStepConfirm
+{
+    std::uint64_t step_num;
 };
 
 #endif // INETCOMMDATA_H

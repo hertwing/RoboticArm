@@ -51,8 +51,11 @@ void GuiGateway::runOnGui()
     m_diagnostic_thread = std::thread(handleGuiDiagnostic, this);
     std::cout << "Starting GUI control selection thread." << std::endl;
     m_control_selection_thread = std::thread(handleGuiControlSelection, this);
+    std::cout << "Starting automatic data thread." << std::endl;
+    m_automatic_data_thread = std::thread(handleGuiAutomaticSteps, this);
     m_diagnostic_thread.join();
     m_control_selection_thread.join();
+    m_automatic_data_thread.join();
 }
 
 void GuiGateway::runOnArm()
@@ -106,6 +109,131 @@ void GuiGateway::handleGuiControlSelection(GuiGateway * gg)
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
+}
+
+void GuiGateway::handleGuiAutomaticSteps(GuiGateway * gg)
+{
+    gg->m_automatic_execute_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticConfirm>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_GATEWAY_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticConfirm), true);
+    gg->m_automatic_step_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticStepConfirm>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_STEP_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticStepConfirm), true);
+    gg->m_automatic_execute_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticExecuteData>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_SHMEM_NAME, sizeof(OdinAutomaticExecuteData), false);
+    gg->m_automatic_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_STEP_SHMEM_NAME, sizeof(OdinServoStep), false);
+    while (gg->m_run_process)
+    {
+        OdinAutomaticExecuteData automatic_execute_data;
+        OdinAutomaticConfirm automatic_confirm;
+        OdinAutomaticStepConfirm servo_step_confirm;
+        OdinServoStep servo_step;
+        automatic_confirm.confirm = false;
+        bool data_start = false;
+        // TODO: write blocking reading and writing shmem wrapper methods
+        while (!data_start)
+        {
+            if (gg->m_automatic_execute_shmem_handler->openShmem())
+            {
+                if (gg->m_automatic_execute_shmem_handler->shmemRead(&automatic_execute_data))
+                {
+                    if (automatic_execute_data.run == true)
+                    {
+                        data_start = true;
+                        automatic_confirm.confirm = true;
+                        std::cout << "Data collection started." << std::endl;
+                    }
+                    else
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                }
+            }
+            else
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+        while (!gg->m_automatic_execute_confirm_shmem_handler->shmemWrite(&automatic_confirm)){
+            std::cout << "Writing confirm." << std::endl;
+        };
+        bool finish_reading = false;
+        int step_num = 0;
+        servo_step_confirm.step_num = 0;
+        while (!finish_reading)
+        {
+            if (gg->m_automatic_step_shmem_handler->openShmem())
+            {
+                if (gg->m_automatic_step_shmem_handler->shmemRead(&servo_step))
+                {
+                    if (servo_step.step_num == step_num)
+                    {
+                        std::cout << "Reading step." << std::endl;
+                        servo_step_confirm.step_num = servo_step.step_num;
+                        ++step_num;
+                        while (!gg->m_automatic_step_confirm_shmem_handler->shmemWrite(&servo_step_confirm))
+                        {
+                            std::cout << "Writing step confirm." << std::endl;
+                        };
+                        std::cout << servo_step.step_num << std::endl;
+                        std::cout << +servo_step.servo_num << std::endl;
+                        std::cout << servo_step.position << std::endl;
+                        std::cout << +servo_step.speed << std::endl;
+                        std::cout << servo_step.delay << std::endl;
+                    }
+                }
+                else
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            }
+            else
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            if (gg->m_automatic_execute_shmem_handler->openShmem())
+            {
+                if (gg->m_automatic_execute_shmem_handler->shmemRead(&automatic_execute_data))
+                {
+                    if (automatic_execute_data.run == false)
+                    {
+                        finish_reading = true;
+                        automatic_confirm.confirm = true;
+                        std::cout << "Data collection finished." << std::endl;
+                    }
+                }
+            }
+            else
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+        bool finish = false;
+        automatic_confirm.confirm = false;
+        while (!finish)
+        {
+            if (gg->m_automatic_execute_shmem_handler->openShmem())
+            {
+                if (gg->m_automatic_execute_shmem_handler->shmemRead(&automatic_execute_data))
+                {
+                    if (automatic_execute_data.run == false)
+                    {
+                        finish = true;
+                        automatic_confirm.confirm = true;
+                    }
+                    else
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                }
+            }
+            else
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+        while (!gg->m_automatic_execute_confirm_shmem_handler->shmemWrite(&automatic_confirm)){};
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 void GuiGateway::handleArmDiagnostic(GuiGateway * gg)
