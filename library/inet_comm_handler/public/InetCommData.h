@@ -11,6 +11,8 @@ const std::string ROBOTIC_GUI_IP = "192.168.1.41";
 
 static constexpr std::uint16_t DIAGNOSTIC_SOCKET_PORT = 7071;
 static constexpr std::uint16_t CONTROL_SELECTION_PORT = 7072;
+static constexpr std::uint16_t AUTOMATIC_EXECUTION_PORT = 7073;
+static constexpr std::uint16_t AUTOMATIC_SERVO_STEP_PORT = 7074;
 
 // TODO: Rewrite to cinfig file
 enum class ControlSelection
@@ -60,7 +62,7 @@ struct OdinServoStep
 
 struct OdinAutomaticExecuteData
 {
-    bool run;
+    std::uint8_t data_collection_status;
     bool run_in_loop;
 };
 

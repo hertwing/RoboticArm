@@ -18,6 +18,14 @@ bool ServoManager::m_run_process = true;
 ServoManager::ServoManager() :
     m_servo_controller()
 {
+    m_automatic_execute_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticConfirm>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_GATEWAY_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticConfirm), true);
+    m_automatic_step_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticStepConfirm>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_STEP_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticStepConfirm), true);
+    m_automatic_execute_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticExecuteData>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_SHMEM_NAME, sizeof(OdinAutomaticExecuteData), false);
+    m_automatic_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_STEP_SHMEM_NAME, sizeof(OdinServoStep), false);
     m_joypad_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<JoypadData>>(
         odin::shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, sizeof(JoypadData), false);
     m_led_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<ws2811_led_t>>(
@@ -52,7 +60,7 @@ void ServoManager::servoDataReader()
                             std::cout << "JOYPAD." << std::endl;
                             break;
                         case static_cast<std::uint8_t>(ControlSelection::AUTOMATIC):
-                            updateLedColors(LedOption::AUTOMATIC);
+                            updateLedColors(LedOption::AUTOMATIC_READY);
                             std::cout << "AUTOMATIC." << std::endl;
                             break;
                         default:
@@ -74,7 +82,8 @@ void ServoManager::servoDataReader()
                 }
                 else if (m_control_selection.control_selection == static_cast<std::uint8_t>(ControlSelection::AUTOMATIC))
                 {
-                    
+                    handleAutomaticData();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
                 else
                 {
@@ -253,10 +262,17 @@ void ServoManager::updateLedColors(std::uint8_t led_options)
 
             m_led_shmem_handler->shmemWrite(m_led_color_status);
             break;
-        case LedOption::AUTOMATIC:
+        case LedOption::AUTOMATIC_READY:
             for (int i = 0; i < led_handler::LED_COUNT; ++i)
             {
-                m_led_color_status[i] = led_handler::LED_COLOR_YELLOW;
+                m_led_color_status[i] = led_handler::LED_COLOR_ORANGE;
+            }
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+        case LedOption::AUTOAMTIC_EXECUTE:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_GREEN;
             }
             m_led_shmem_handler->shmemWrite(m_led_color_status);
             break;
@@ -281,6 +297,121 @@ void ServoManager::updateLedColors(std::uint8_t led_options)
             }
             m_led_shmem_handler->shmemWrite(m_led_color_status);
             break;
+    }
+}
+
+void ServoManager::handleAutomaticData()
+{
+    OdinAutomaticExecuteData automatic_execute_data;
+    OdinAutomaticConfirm automatic_confirm;
+    OdinAutomaticStepConfirm servo_step_confirm;
+    OdinServoStep servo_step;
+    automatic_confirm.confirm = false;
+
+    if (m_automatic_execute_shmem_handler->openShmem())
+    {
+        m_automatic_execute_shmem_handler->shmemRead(&automatic_execute_data);
+        if (automatic_execute_data.data_collection_status == 1)
+        {
+            m_automatic_steps.clear();
+            std::cout << "Data collection started." << std::endl;
+            // Start data collection
+            automatic_confirm.confirm = true;
+            while (!m_automatic_execute_confirm_shmem_handler->shmemWrite(&automatic_confirm)){};
+            std::cout << "Writing confirm." << std::endl;
+
+            bool finish_reading = false;
+            int step_num = 0;
+            servo_step_confirm.step_num = 0;
+            while (!finish_reading)
+            {
+                if (m_automatic_step_shmem_handler->openShmem())
+                {
+                    if (m_automatic_step_shmem_handler->shmemRead(&servo_step))
+                    {
+                        // std::cout << "servo_step.step_num: " << servo_step.step_num << std::endl;
+                        if (servo_step.step_num == step_num)
+                        {
+                            std::cout << "Reading step." << std::endl;
+                            servo_step_confirm.step_num = step_num;
+                            ++step_num;
+                            while (!m_automatic_step_confirm_shmem_handler->shmemWrite(&servo_step_confirm)){};
+                            std::cout << "Writing step confirm." << std::endl;
+                            std::cout << servo_step.step_num << std::endl;
+                            std::cout << +servo_step.servo_num << std::endl;
+                            std::cout << servo_step.position << std::endl;
+                            std::cout << +servo_step.speed << std::endl;
+                            std::cout << servo_step.delay << std::endl;
+                            m_automatic_steps.emplace_back(servo_step);
+                        }
+                    }
+                    else
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                }
+                else
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                if (m_automatic_execute_shmem_handler->openShmem())
+                {
+                    if (m_automatic_execute_shmem_handler->shmemRead(&automatic_execute_data))
+                    {
+                        if (automatic_execute_data.data_collection_status == 2)
+                        {
+                            finish_reading = true;
+                            automatic_confirm.confirm = true;
+                            std::cout << "Data collection finished." << std::endl;
+                        }
+                    }
+                }
+                else
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            }
+            bool finish = false;
+            automatic_confirm.confirm = false;
+            while (!finish)
+            {
+                if (m_automatic_execute_shmem_handler->openShmem())
+                {
+                    if (m_automatic_execute_shmem_handler->shmemRead(&automatic_execute_data))
+                    {
+                        if (automatic_execute_data.data_collection_status == 2)
+                        {
+                            finish = true;
+                            automatic_confirm.confirm = true;
+                        }
+                        else
+                        {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        }
+                    }
+                }
+                else
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            }
+            while (!m_automatic_execute_confirm_shmem_handler->shmemWrite(&automatic_confirm)){};
+        }
+    }
+
+    if (m_automatic_steps.size())
+    {
+        updateLedColors(LedOption::AUTOAMTIC_EXECUTE);
+        for (int i = 0; i < m_automatic_steps.size(); ++i)
+        {
+            m_servo_controller.setAbsolutePosition(m_automatic_steps.at(i).position, m_automatic_steps.at(i).servo_num-1, m_automatic_steps.at(i).speed);
+            std::this_thread::sleep_for(std::chrono::milliseconds(m_automatic_steps.at(i).delay));
+        }
+        updateLedColors(LedOption::AUTOMATIC_READY);
+    }
+    if (automatic_execute_data.run_in_loop == false)
+    {
+        m_automatic_steps.clear();
     }
 }
 

@@ -580,19 +580,12 @@ opacity: 0.1;</string>
                  </widget>
                 </item>
                 <item row="0" column="5">
-                 <widget class="QPushButton" name="pushButton">
+                 <widget class="QPushButton" name="button_stop">
                   <property name="styleSheet">
                    <string notr="true">background-color: rgb(164, 0, 0);</string>
                   </property>
                   <property name="text">
                    <string>Stop</string>
-                  </property>
-                 </widget>
-                </item>
-                <item row="0" column="2">
-                 <widget class="QRadioButton" name="radioButton_loop">
-                  <property name="text">
-                   <string>Execute in loop</string>
                   </property>
                  </widget>
                 </item>
@@ -1431,6 +1424,16 @@ color: rgb(238, 238, 236)</string>
                       </property>
                      </spacer>
                     </item>
+                    <item>
+                     <widget class="QPushButton" name="button_table_clear">
+                      <property name="styleSheet">
+                       <string notr="true">background-color: rgb(164, 0, 0);</string>
+                      </property>
+                      <property name="text">
+                       <string>Clear</string>
+                      </property>
+                     </widget>
+                    </item>
                    </layout>
                   </item>
                  </layout>
@@ -1439,6 +1442,16 @@ color: rgb(238, 238, 236)</string>
                  <widget class="QLabel" name="label_2">
                   <property name="text">
                    <string>Maximum steps: 1000</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="0" column="3">
+                 <widget class="QRadioButton" name="radioButton_loop">
+                  <property name="text">
+                   <string>Execute in loop</string>
+                  </property>
+                  <property name="autoExclusive">
+                   <bool>false</bool>
                   </property>
                  </widget>
                 </item>

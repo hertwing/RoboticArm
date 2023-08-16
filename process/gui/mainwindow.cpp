@@ -819,6 +819,7 @@ void MainWindow::scan_automatic_files()
 
 void MainWindow::on_radioButton_loop_toggled(bool checked)
 {
+    std::cout << "TOGGLE!" << std::endl;
     checked ? m_run_in_loop = true : m_run_in_loop = false;
 }
 
@@ -828,23 +829,37 @@ void MainWindow::on_button_execute_clicked()
     OdinAutomaticStepConfirm servo_step_confirm;
     OdinAutomaticConfirm automatic_confirm;
     OdinAutomaticExecuteData automatic_data;
-    automatic_data.run = true;
+    automatic_data.data_collection_status = 1;
     automatic_data.run_in_loop = m_run_in_loop;
     // TODO: Write error handling
     while (!m_automatic_execute_shmem_handler->shmemWrite(&automatic_data)){};
     bool confirm = false;
     while (!confirm)
     {
-        m_automatic_execute_confirm_shmem_handler->shmemRead(&automatic_confirm);
-        if (automatic_confirm.confirm == true)
+        if (m_automatic_execute_confirm_shmem_handler->openShmem())
         {
-            confirm = true;
+            if (m_automatic_execute_confirm_shmem_handler->shmemRead(&automatic_confirm))
+            {
+                if (automatic_confirm.confirm == true)
+                {
+                    confirm = true;
+                }
+                else
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            }
+            else
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
         }
         else
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
+
     bool stop_sending_steps = false;
     while (!stop_sending_steps)
     {
@@ -874,21 +889,42 @@ void MainWindow::on_button_execute_clicked()
                             std::this_thread::sleep_for(std::chrono::milliseconds(100));
                         }
                     }
+                    else
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                }
+                else
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
             }
         }
         stop_sending_steps = true;
         std::cout << "Sending steps finished." << std::endl;
     }
-    automatic_data.run = false;
+    automatic_data.data_collection_status = 2;
     while (!m_automatic_execute_shmem_handler->shmemWrite(&automatic_data)){};
     confirm = false;
     while (!confirm)
     {
-        m_automatic_execute_confirm_shmem_handler->shmemRead(&automatic_confirm);
-        if (automatic_confirm.confirm == true)
+        if (m_automatic_execute_confirm_shmem_handler->openShmem())
         {
-            confirm = true;
+            if (m_automatic_execute_confirm_shmem_handler->shmemRead(&automatic_confirm))
+            {
+                if (automatic_confirm.confirm == true)
+                {
+                    confirm = true;
+                }
+                else
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            }
+            else
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
         }
         else
         {
@@ -896,3 +932,10 @@ void MainWindow::on_button_execute_clicked()
         }
     }
 }
+
+void MainWindow::on_button_table_clear_clicked()
+{
+    m_automatic_steps_count = 0;
+    ui->table_servo_steps->setRowCount(m_automatic_steps_count);
+}
+

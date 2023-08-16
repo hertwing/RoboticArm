@@ -98,6 +98,7 @@ private slots:
     void on_button_load_clicked();
     void on_radioButton_loop_toggled(bool checked);
     void on_button_execute_clicked();
+    void on_button_table_clear_clicked();
 
 private:
     void draw_menu();
