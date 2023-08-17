@@ -45,10 +45,10 @@ MainWindow::MainWindow(QWidget *parent)
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), false);
     m_arm_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME, sizeof(DiagnosticData), false);
-    m_automatic_execute_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticConfirm>>(
-        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_GATEWAY_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticConfirm), false);
-    m_automatic_step_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticStepConfirm>>(
-        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_STEP_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticStepConfirm), false);
+//    m_automatic_execute_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticConfirm>>(
+//        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_GATEWAY_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticConfirm), false);
+//    m_automatic_step_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticStepConfirm>>(
+//        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_STEP_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticStepConfirm), false);
 
     // Fill shmem data with initial values
     // TODO: write a method for that
@@ -826,111 +826,26 @@ void MainWindow::on_radioButton_loop_toggled(bool checked)
 void MainWindow::on_button_execute_clicked()
 {
     OdinServoStep servo_step;
-    OdinAutomaticStepConfirm servo_step_confirm;
-    OdinAutomaticConfirm automatic_confirm;
     OdinAutomaticExecuteData automatic_data;
     automatic_data.data_collection_status = 1;
     automatic_data.run_in_loop = m_run_in_loop;
     // TODO: Write error handling
-    while (!m_automatic_execute_shmem_handler->shmemWrite(&automatic_data)){};
-    bool confirm = false;
-    while (!confirm)
-    {
-        if (m_automatic_execute_confirm_shmem_handler->openShmem())
-        {
-            if (m_automatic_execute_confirm_shmem_handler->shmemRead(&automatic_confirm))
-            {
-                if (automatic_confirm.confirm == true)
-                {
-                    confirm = true;
-                }
-                else
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
-            }
-            else
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
-        }
-        else
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
+    m_automatic_execute_shmem_handler->shmemWrite(&automatic_data, true);
 
-    bool stop_sending_steps = false;
-    while (!stop_sending_steps)
+    for (int i = 0; i < ui->table_servo_steps->rowCount(); ++i)
     {
-        for (int i = 0; i < ui->table_servo_steps->rowCount(); ++i)
-        {
-            std::cout << "Writing data" << std::endl;
-            servo_step.step_num = i;
-            servo_step.servo_num = ui->table_servo_steps->item(i, 0)->text().toInt();
-            servo_step.position = ui->table_servo_steps->item(i, 1)->text().toInt();
-            servo_step.speed = ui->table_servo_steps->item(i, 2)->text().toInt();
-            servo_step.delay = ui->table_servo_steps->item(i, 3)->text().toInt();
-            while (!m_automatic_step_shmem_handler->shmemWrite(&servo_step));
-            bool confirm_step = false;
-            while (!confirm_step)
-            {
-                if (m_automatic_step_confirm_shmem_handler->openShmem())
-                {
-                    if (m_automatic_step_confirm_shmem_handler->shmemRead(&servo_step_confirm))
-                    {
-                        if (servo_step_confirm.step_num == i)
-                        {
-                            std::cout << "Confirm read" << std::endl;
-                            confirm_step = true;
-                        }
-                        else
-                        {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                        }
-                    }
-                    else
-                    {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    }
-                }
-                else
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
-            }
-        }
-        stop_sending_steps = true;
-        std::cout << "Sending steps finished." << std::endl;
+        std::cout << "Writing data" << std::endl;
+        servo_step.step_num = i;
+        servo_step.servo_num = ui->table_servo_steps->item(i, 0)->text().toInt();
+        servo_step.position = ui->table_servo_steps->item(i, 1)->text().toInt();
+        servo_step.speed = ui->table_servo_steps->item(i, 2)->text().toInt();
+        servo_step.delay = ui->table_servo_steps->item(i, 3)->text().toInt();
+        m_automatic_step_shmem_handler->shmemWrite(&servo_step, true);
     }
+    std::cout << "Sending steps finished." << std::endl;
+
     automatic_data.data_collection_status = 2;
-    while (!m_automatic_execute_shmem_handler->shmemWrite(&automatic_data)){};
-    confirm = false;
-    while (!confirm)
-    {
-        if (m_automatic_execute_confirm_shmem_handler->openShmem())
-        {
-            if (m_automatic_execute_confirm_shmem_handler->shmemRead(&automatic_confirm))
-            {
-                if (automatic_confirm.confirm == true)
-                {
-                    confirm = true;
-                }
-                else
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
-            }
-            else
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
-        }
-        else
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
+    m_automatic_execute_shmem_handler->shmemWrite(&automatic_data, true);
 }
 
 void MainWindow::on_button_table_clear_clicked()

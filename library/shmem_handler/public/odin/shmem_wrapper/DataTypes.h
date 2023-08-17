@@ -12,6 +12,9 @@ struct DataTypes {
     static constexpr const char * SHMEM_IDENTIFIER_PATH = "/tmp/arm_shm/";
     static constexpr const char * SHMEM_IDENTIFIER_NAME = "_shmem_identifier.txt";
 
+
+    static constexpr const char * SHMEM_READER_BLOCKER_NAME = "ReaderBlocker";
+    static constexpr const char * SHMEM_WRITER_BLOCKER_NAME = "WriterBlocker";
     static constexpr const char * JOYPAD_SHMEM_NAME = "ControllerShmem";
     static constexpr const char * LED_SHMEM_NAME = "LedShmem";
     static constexpr const char * DIAGNOSTIC_SHMEM_NAME = "DiagnosticShmem";
