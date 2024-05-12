@@ -99,6 +99,7 @@ private slots:
     void on_radioButton_loop_toggled(bool checked);
     void on_button_execute_clicked();
     void on_button_table_clear_clicked();
+    void on_button_stop_clicked();
 
 private:
     void draw_menu();
@@ -131,6 +132,10 @@ private:
     bool m_is_servo_speed_valid;
     bool m_is_delay_valid;
     bool m_run_in_loop;
+    bool m_is_automatic_steps_work;
+    bool m_is_automatic_work_paused;
+
+    automatic_movement_status_t m_automatic_movement_status;
 
     std::list<OdinServoStep> m_automatic_steps;
 
@@ -140,12 +145,12 @@ private:
 
     std::uint8_t m_automatic_line_edit_select;
 
+    std::uint16_t m_message_retries = 0;
+
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_gui_diagnostic_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_arm_diagnostic_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
-    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinAutomaticExecuteData>> m_automatic_execute_shmem_handler;
-    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinAutomaticConfirm>> m_automatic_execute_confirm_shmem_handler;
-    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinAutomaticStepConfirm>> m_automatic_step_confirm_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<automatic_movement_status_t>> m_automatic_execute_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinServoStep>> m_automatic_step_shmem_handler;
 
     DiagnosticData m_gui_diagnostic_data;

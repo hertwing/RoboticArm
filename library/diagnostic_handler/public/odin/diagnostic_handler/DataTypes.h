@@ -17,7 +17,7 @@ static constexpr const char * CPU_TEMP_CMD = "vcgencmd measure_temp | egrep -o '
 static constexpr const char * TOTAL_MEM_CMD = "cat /proc/meminfo | grep MemTotal | awk '{print $2}'";
 static constexpr const char * FREE_MEM_CMD = "cat /proc/meminfo | grep MemFree | awk '{print $2}'";
 // TODO: Need to setup RPi IP manually and add boards addresses to hosts
-static constexpr const char * LATENCY_GUI_CMD = "ping -c 1 192.168.1.24 | grep time= | awk -F'[a-z=&\"]*' '{print $7}'";
+static constexpr const char * LATENCY_GUI_CMD = "ping -c 1 192.168.1.32 | grep time= | awk -F'[a-z=&\"]*' '{print $7}'";
 static constexpr const char * LATENCY_ARM_CMD = "ping -c 1 192.168.1.41 | grep time= | awk -F'[a-z=&\"]*' '{print $7}'";
 
 struct DiagnosticData

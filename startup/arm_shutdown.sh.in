@@ -1,18 +1,18 @@
 #!/bin/bash
 
-ps aux | grep -ie servo_manager | awk '{print $2}' | xargs kill -SIGINT
-ps aux | grep -ie joypad_manager | awk '{print $2}' | xargs kill -SIGINT
-ps aux | grep -ie led_manager | awk '{print $2}' | xargs kill -SIGINT
-ps aux | grep -ie gui_gateway | awk '{print $2}' | xargs kill -SIGINT
-ps aux | grep -ie diagnostic_manager | awk '{print $2}' | xargs kill -SIGINT
+sudo ps aux | grep -ie servo_manager | awk '{print $2}' | xargs kill -SIGINT
+sudo ps aux | grep -ie joypad_manager | awk '{print $2}' | xargs kill -SIGINT
+sudo ps aux | grep -ie led_manager | awk '{print $2}' | xargs kill -SIGINT
+sudo ps aux | grep -ie gui_gateway | awk '{print $2}' | xargs kill -SIGINT
+sudo ps aux | grep -ie diagnostic_manager | awk '{print $2}' | xargs kill -SIGINT
 
 sleep 2
 
-ps aux | grep -ie servo_manager | awk '{print $2}' | xargs kill -SIGTERM
-ps aux | grep -ie joypad_manager | awk '{print $2}' | xargs kill -SIGTERM
-ps aux | grep -ie led_manager | awk '{print $2}' | xargs kill -SIGTERM
-ps aux | grep -ie gui_gateway | awk '{print $2}' | xargs kill -SIGTERM
-ps aux | grep -ie diagnostic_manager | awk '{print $2}' | xargs kill -SIGTERM
+sudo ps aux | grep -ie servo_manager | awk '{print $2}' | xargs kill -SIGTERM
+sudo ps aux | grep -ie joypad_manager | awk '{print $2}' | xargs kill -SIGTERM
+sudo ps aux | grep -ie led_manager | awk '{print $2}' | xargs kill -SIGTERM
+sudo ps aux | grep -ie gui_gateway | awk '{print $2}' | xargs kill -SIGTERM
+sudo ps aux | grep -ie diagnostic_manager | awk '{print $2}' | xargs kill -SIGTERM
 
 # Remove from /dev/shm
-rm -rf /dev/shm/*
+sudo rm -rf /dev/shm/*

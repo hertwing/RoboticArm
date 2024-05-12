@@ -47,7 +47,7 @@ void ServoController::setStartupPosition()
 
 void ServoController::setAbsolutePosition(uint16_t position, uint8_t servo_num, uint8_t step = 1)
 {
-    std::cout << "Moving servo number: " << servo_num << " to position: " << position << ". Step: " << step << "." << std::endl;
+    std::cout << "Moving servo number: " << +servo_num << " to position: " << position << ". Step: " << +step << "." << std::endl;
     std::uint16_t current_position = m_current_position[servo_num];
     while (current_position != position)
     {

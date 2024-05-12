@@ -5,14 +5,16 @@
 #include <filesystem>
 #include <string>
 
-// TODO: Create a script to atumatically assing board IPs when env install
-const std::string ROBOTIC_ARM_IP = "192.168.1.24";
+// TODO: Set fixed IP on RPI boards
+const std::string ROBOTIC_ARM_IP = "192.168.1.32";
 const std::string ROBOTIC_GUI_IP = "192.168.1.41";
 
 static constexpr std::uint16_t DIAGNOSTIC_SOCKET_PORT = 7071;
 static constexpr std::uint16_t CONTROL_SELECTION_PORT = 7072;
 static constexpr std::uint16_t AUTOMATIC_EXECUTION_PORT = 7073;
 static constexpr std::uint16_t AUTOMATIC_SERVO_STEP_PORT = 7074;
+
+typedef std::uint8_t automatic_movement_status_t;
 
 // TODO: Rewrite to cinfig file
 enum class ControlSelection
@@ -21,6 +23,17 @@ enum class ControlSelection
     JOYPAD,
     AUTOMATIC,
     DIAGNOSTIC
+};
+
+enum AutomaticMovementStatus
+{
+    NONE,
+    START_SENDING,
+    SEND_SUCCESS,
+    SEND_DONE,
+    RECEIVE_SUCCESS,
+    RECEIVE_DONE,
+    SEND_FAIL
 };
 
 struct OdinControlSelection
@@ -58,22 +71,6 @@ struct OdinServoStep
     std::uint16_t position;
     std::uint64_t delay;
     std::uint8_t speed;
-};
-
-struct OdinAutomaticExecuteData
-{
-    std::uint8_t data_collection_status;
-    bool run_in_loop;
-};
-
-struct OdinAutomaticConfirm
-{
-    bool confirm;
-};
-
-struct OdinAutomaticStepConfirm
-{
-    std::uint64_t step_num;
 };
 
 #endif // INETCOMMDATA_H

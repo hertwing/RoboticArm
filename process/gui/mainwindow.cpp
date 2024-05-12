@@ -27,6 +27,9 @@ MainWindow::MainWindow(QWidget *parent)
     m_is_servo_speed_valid(false),
     m_is_delay_valid(false),
     m_run_in_loop(false),
+    m_is_automatic_steps_work(false),
+    m_is_automatic_work_paused(false),
+    m_automatic_movement_status(AutomaticMovementStatus::NONE),
     m_automatic_file_path(std::filesystem::path(odin::shmem_wrapper::DataTypes::AUTOMATIC_FILES_PATH))
 {
     ui->setupUi(this);
@@ -39,16 +42,12 @@ MainWindow::MainWindow(QWidget *parent)
         odin::shmem_wrapper::DataTypes::AUTOMATIC_STEP_SHMEM_NAME, sizeof(OdinServoStep), true);
     m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>>(
         odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), true);
-    m_automatic_execute_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticExecuteData>>(
-        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_SHMEM_NAME, sizeof(OdinAutomaticExecuteData), true);
+    m_automatic_execute_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<automatic_movement_status_t>>(
+        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_SHMEM_NAME, sizeof(automatic_movement_status_t), true);
     m_gui_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), false);
     m_arm_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME, sizeof(DiagnosticData), false);
-//    m_automatic_execute_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticConfirm>>(
-//        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_GATEWAY_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticConfirm), false);
-//    m_automatic_step_confirm_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinAutomaticStepConfirm>>(
-//        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_STEP_CONFIRM_SHMEM_NAME, sizeof(OdinAutomaticStepConfirm), false);
 
     // Fill shmem data with initial values
     // TODO: write a method for that
@@ -819,33 +818,90 @@ void MainWindow::scan_automatic_files()
 
 void MainWindow::on_radioButton_loop_toggled(bool checked)
 {
-    std::cout << "TOGGLE!" << std::endl;
     checked ? m_run_in_loop = true : m_run_in_loop = false;
+
+    std::cout << "run in loop: " << m_run_in_loop << std::endl;
 }
 
 void MainWindow::on_button_execute_clicked()
 {
-    OdinServoStep servo_step;
-    OdinAutomaticExecuteData automatic_data;
-    automatic_data.data_collection_status = 1;
-    automatic_data.run_in_loop = m_run_in_loop;
-    // TODO: Write error handling
-    m_automatic_execute_shmem_handler->shmemWrite(&automatic_data, true);
+    std::thread t([this](){
+        m_message_retries = 0;
+        ui->button_execute->setEnabled(false);
 
-    for (int i = 0; i < ui->table_servo_steps->rowCount(); ++i)
-    {
-        std::cout << "Writing data" << std::endl;
-        servo_step.step_num = i;
-        servo_step.servo_num = ui->table_servo_steps->item(i, 0)->text().toInt();
-        servo_step.position = ui->table_servo_steps->item(i, 1)->text().toInt();
-        servo_step.speed = ui->table_servo_steps->item(i, 2)->text().toInt();
-        servo_step.delay = ui->table_servo_steps->item(i, 3)->text().toInt();
-        m_automatic_step_shmem_handler->shmemWrite(&servo_step, true);
-    }
-    std::cout << "Sending steps finished." << std::endl;
+        if (!m_is_automatic_steps_work && ui->table_servo_steps->rowCount() > 0)
+        {
+            m_is_automatic_steps_work = true;
+            OdinServoStep servo_step;
 
-    automatic_data.data_collection_status = 2;
-    m_automatic_execute_shmem_handler->shmemWrite(&automatic_data, true);
+            for (int i = 0; i < ui->table_servo_steps->rowCount();)
+            {
+                while(m_is_automatic_work_paused) {};
+                m_automatic_movement_status = AutomaticMovementStatus::START_SENDING;
+
+                m_automatic_execute_shmem_handler->shmemWrite(&m_automatic_movement_status);
+
+                while(true)
+                {
+                    m_automatic_execute_shmem_handler->shmemRead(&m_automatic_movement_status);
+                    if (m_automatic_movement_status == AutomaticMovementStatus::SEND_SUCCESS)
+                    {
+                        break;
+                    }
+                }
+                    // std::cout << "Writing data" << std::endl;
+                servo_step.step_num = i;
+                servo_step.servo_num = ui->table_servo_steps->item(i, 0)->text().toInt();
+                servo_step.position = ui->table_servo_steps->item(i, 1)->text().toInt();
+                servo_step.speed = ui->table_servo_steps->item(i, 2)->text().toInt();
+                servo_step.delay = ui->table_servo_steps->item(i, 3)->text().toInt();
+                m_automatic_step_shmem_handler->shmemWrite(&servo_step);
+
+                m_automatic_movement_status = AutomaticMovementStatus::START_SENDING;
+                m_automatic_execute_shmem_handler->shmemWrite(&m_automatic_movement_status);
+                ++i;
+
+                // Wait for message to be send
+                while(true)
+                {
+                    m_automatic_execute_shmem_handler->shmemRead(&m_automatic_movement_status);
+                    if (m_automatic_movement_status == AutomaticMovementStatus::SEND_SUCCESS)
+                    {
+                        break;
+                    }
+                }
+
+                std::cout << "Sending step finished." << std::endl;
+
+                m_automatic_movement_status = AutomaticMovementStatus::SEND_DONE;
+                m_automatic_execute_shmem_handler->shmemWrite(&m_automatic_movement_status);
+
+                while(true)
+                {
+                    m_automatic_execute_shmem_handler->shmemRead(&m_automatic_movement_status);
+                    if (m_automatic_movement_status == AutomaticMovementStatus::RECEIVE_DONE)
+                    {
+                        m_message_retries = 0;
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    ++m_message_retries;
+                }
+
+                if (m_run_in_loop && i == ui->table_servo_steps->rowCount())
+                {
+                    i = 0;
+                    std::cout << "Sending steps finished. Continuing in loop from step 1." << std::endl;
+                }
+            }
+
+            std::cout << "Automatic steps execution completed." << std::endl;
+
+            m_is_automatic_steps_work = false;
+        }
+        ui->button_execute->setEnabled(true);
+    });
+    t.detach();
 }
 
 void MainWindow::on_button_table_clear_clicked()
@@ -854,3 +910,8 @@ void MainWindow::on_button_table_clear_clicked()
     ui->table_servo_steps->setRowCount(m_automatic_steps_count);
 }
 
+
+void MainWindow::on_button_stop_clicked()
+{
+    m_is_automatic_work_paused = !m_is_automatic_work_paused;
+}
