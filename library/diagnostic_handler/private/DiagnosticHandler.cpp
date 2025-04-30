@@ -90,7 +90,7 @@ void DiagnosticHandler::getLatency(double & data, const std::string & board_name
     }
     catch(const std::exception & error)
     {
-        std::cerr << "Couldn't retrieve cpu temp: " << error.what() << std::endl;
+        std::cerr << "Couldn't retrieve board latency: " << error.what() << std::endl;
     }
 }
 
