@@ -305,13 +305,13 @@ bool ShmemHandler<T>::writeOperation(const T * data, const bool blocking)
         }
     }
 
-    if (!safeSemWait<T>(m_writer_sem, m_writer_sem_name)) return false;
-    if (!safeSemPost<T>(m_reader_sem, m_reader_sem_name)) return false;
+    if (!safeSemWait(m_writer_sem, m_writer_sem_name)) return false;
+    if (!safeSemPost(m_reader_sem, m_reader_sem_name)) return false;
 
     std::memcpy(m_data, data, m_shmem_data_size);
 
-    if (!safeSemWait<T>(m_reader_sem, m_reader_sem_name)) return false;
-    if (!safeSemPost<T>(m_writer_sem, m_writer_sem_name)) return false;
+    if (!safeSemWait(m_reader_sem, m_reader_sem_name)) return false;
+    if (!safeSemPost(m_writer_sem, m_writer_sem_name)) return false;
 
     if (blocking)
     {
@@ -319,13 +319,13 @@ bool ShmemHandler<T>::writeOperation(const T * data, const bool blocking)
         std::int64_t timeout = 0;
         while (!was_read && timeout < 5000)
         {
-            if (!safeSemWait<T>(m_reader_sem, m_reader_sem_name)) return false;
-            if (!safeSemPost<T>(m_writer_sem, m_writer_sem_name)) return false;
+            if (!safeSemWait(m_reader_sem, m_reader_sem_name)) return false;
+            if (!safeSemPost(m_writer_sem, m_writer_sem_name)) return false;
 
             std::memcpy(&crc_confirm, m_reader_blocker_crc, sizeof(std::uint8_t));
 
-            if (!safeSemWait<T>(m_writer_sem, m_writer_sem_name)) return false;
-            if (!safeSemPost<T>(m_reader_sem, m_reader_sem_name)) return false;
+            if (!safeSemWait(m_writer_sem, m_writer_sem_name)) return false;
+            if (!safeSemPost(m_reader_sem, m_reader_sem_name)) return false;
 
             if (crc == crc_confirm)
             {
@@ -369,8 +369,8 @@ bool ShmemHandler<T>::readOperation(T * data, const bool blocking)
 {
     uint8_t crc = 1;
 
-    if (!safeSemWait<T>(m_reader_sem, m_reader_sem_name)) return false;
-    if (!safeSemPost<T>(m_writer_sem, m_writer_sem_name)) return false;
+    if (!safeSemWait(m_reader_sem, m_reader_sem_name)) return false;
+    if (!safeSemPost(m_writer_sem, m_writer_sem_name)) return false;
 
     std::memcpy(data, m_data, m_shmem_data_size);
 
@@ -382,17 +382,17 @@ bool ShmemHandler<T>::readOperation(T * data, const bool blocking)
             crc += int_data_cast[i];
         }
 
-        if (!safeSemWait<T>(m_writer_sem, m_writer_sem_name)) return false;
-        if (!safeSemPost<T>(m_reader_sem, m_reader_sem_name)) return false;
+        if (!safeSemWait(m_writer_sem, m_writer_sem_name)) return false;
+        if (!safeSemPost(m_reader_sem, m_reader_sem_name)) return false;
 
         std::memcpy(m_reader_blocker_crc, &crc, sizeof(std::uint8_t));
 
-        if (!safeSemWait<T>(m_reader_sem, m_reader_sem_name)) return false;
-        if (!safeSemPost<T>(m_writer_sem, m_writer_sem_name)) return false;
+        if (!safeSemWait(m_reader_sem, m_reader_sem_name)) return false;
+        if (!safeSemPost(m_writer_sem, m_writer_sem_name)) return false;
     }
 
-    if (!safeSemWait<T>(m_writer_sem, m_writer_sem_name)) return false;
-    if (!safeSemPost<T>(m_reader_sem, m_reader_sem_name)) return false;
+    if (!safeSemWait(m_writer_sem, m_writer_sem_name)) return false;
+    if (!safeSemPost(m_reader_sem, m_reader_sem_name)) return false;
 
     return true;
 }
