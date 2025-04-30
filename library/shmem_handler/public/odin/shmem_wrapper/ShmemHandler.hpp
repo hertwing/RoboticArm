@@ -41,6 +41,9 @@ private:
     bool writeOperation(const T *, const bool blocking);
     void closeShmem();
 
+    inline static bool safeSemWait(sem_t* sem, const std::string& sem_name);
+    inline static bool safeSemPost(sem_t* sem, const std::string& sem_name);
+
 private:
     bool m_is_owner;
     bool m_is_shmem_opened;
@@ -89,7 +92,7 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, std::uint32_t data_size, 
 
     if (m_is_owner)
     {
-        m_identifier_num = std::to_string(getpid()).c_str();
+        m_identifier_num = std::to_string(getpid());
         m_shmem_name_with_id = m_shmem_name + m_identifier_num;
 
         m_reader_blocking_shmem_name = DataTypes::SHMEM_READER_BLOCKER_NAME + m_shmem_name + m_identifier_num;
@@ -98,13 +101,13 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, std::uint32_t data_size, 
         m_reader_sem_name = m_reader_sem_prefix + m_shmem_name + m_identifier_num;
         m_blocking_sem_name = m_blocking_sem_prefix + m_shmem_name + m_identifier_num;
 
-        //   createShmem();
         while(!createShmem() && m_run_process)
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
         };
-    } else {
-        //   openShmem();
+    }
+    else
+    {
         while(!openShmem() && m_run_process)
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -115,15 +118,7 @@ ShmemHandler<T>::ShmemHandler(const char * shmem_name, std::uint32_t data_size, 
 template <typename T>
 ShmemHandler<T>::~ShmemHandler()
 {
-    // Close shmem fd only if owner process is closing
-    if (m_is_owner)
-    {
-        std::cout << "Closing shmem." << std::endl;
-        munmap(m_data, m_shmem_data_size);
-        munmap(m_reader_blocker_crc, sizeof(std::uint8_t));
-        closeShmem();
-        shm_unlink(m_shmem_name_with_id.c_str());
-    }
+    closeShmem();
 }
 
 template <typename T>
@@ -141,7 +136,7 @@ bool ShmemHandler<T>::createShmem()
     {
         std::cout << "Couldn't open " + m_shmem_name_with_id << " errno: " << m_shmem_fd << std::endl;
         closeShmem();
-        return 0;
+        return false;
     }
     else
     {
@@ -151,70 +146,71 @@ bool ShmemHandler<T>::createShmem()
             {
                 std::cout << "Couldn't create directory " + static_cast<std::string>(DataTypes::SHMEM_IDENTIFIER_PATH) << std::endl;
                 closeShmem();
-                return 0;
-            }
-            else
-            {
-                std::ofstream ofs(m_shmem_identifier_path, std::ofstream::out);
-                ofs << m_identifier_num;
-                ofs.close();
-                ftruncate(m_shmem_fd, m_shmem_data_size);
-                ftruncate(m_reader_blocker_fd, sizeof(std::uint8_t));
-                m_data = (T *)mmap(0, m_shmem_data_size, PROT_READ | PROT_WRITE, MAP_SHARED, m_shmem_fd, 0);
-                m_reader_blocker_crc = (std::uint8_t *)mmap(0, sizeof(std::uint8_t), PROT_READ | PROT_WRITE, MAP_SHARED, m_reader_blocker_fd, 0);
+                return false;
             }
         }
-        else 
+        std::ofstream ofs(m_shmem_identifier_path, std::ofstream::out);
+        ofs << m_identifier_num;
+        ofs.close();
+        if (ftruncate(m_shmem_fd, m_shmem_data_size) == -1)
+        { 
+            std::cout << "Error during first ftruncate operation." << std::endl;
+            closeShmem();
+            return false; 
+        }
+        if (ftruncate(m_reader_blocker_fd, sizeof(std::uint8_t)) == -1)
         {
-            std::ofstream ofs(m_shmem_identifier_path, std::ofstream::out);
-            ofs << m_identifier_num;
-            ofs.close();
-            ftruncate(m_shmem_fd, m_shmem_data_size);
-            ftruncate(m_reader_blocker_fd, sizeof(std::uint8_t));
-            m_data = (T *)mmap(0, m_shmem_data_size, PROT_READ | PROT_WRITE, MAP_SHARED, m_shmem_fd, 0);
-            m_reader_blocker_crc = (std::uint8_t *)mmap(0, sizeof(std::uint8_t), PROT_READ | PROT_WRITE, MAP_SHARED, m_reader_blocker_fd, 0);
+            std::cout << "Error during second ftruncate operation." << std::endl;
+            closeShmem();
+            return false; 
+        }
+        m_data = (T *)mmap(0, m_shmem_data_size, PROT_READ | PROT_WRITE, MAP_SHARED, m_shmem_fd, 0);
+        m_reader_blocker_crc = (std::uint8_t *)mmap(0, sizeof(std::uint8_t), PROT_READ | PROT_WRITE, MAP_SHARED, m_reader_blocker_fd, 0);
+
+        if (m_data == MAP_FAILED || m_reader_blocker_crc == MAP_FAILED)
+        {
+            std::cout << "Failed to mmap memory." << std::endl;
+            closeShmem();
+            return false;
         }
 
         std::cout << "Opening semaphores: " << m_writer_sem_name << " " << m_reader_sem_name << " " << m_blocking_sem_name << std::endl;
         if ((m_writer_sem = sem_open(m_writer_sem_name.c_str(), O_CREAT, 0660, 0)) == SEM_FAILED)
         {
             std::cout << "Couldn't create semaphore " + m_writer_sem_name << std::endl;
-            // TODO: Delete shmem if coudln't create semaphores
-            sem_close(m_writer_sem);
             closeShmem();
-            return 0;
+            return false;
         }
         if ((m_reader_sem = sem_open(m_reader_sem_name.c_str(), O_CREAT, 0660, 0)) == SEM_FAILED)
         {
             std::cout << "Couldn't create semaphore " + m_reader_sem_name << std::endl;
-            sem_close(m_reader_sem);
             closeShmem();
-            return 0;
+            return false;
         }
         if ((m_blocking_sem = sem_open(m_blocking_sem_name.c_str(), O_CREAT, 0660, 0)) == SEM_FAILED)
         {
             std::cout << "Couldn't create semaphore " + m_blocking_sem_name << std::endl;
-            sem_close(m_blocking_sem);
             closeShmem();
-            return 0;
+            return false;
         }
+        // Set initial state of semaphores to "unlocked" (ready for operation)
         std::cout << "Posting reader and writer semaphores after creation: " << m_writer_sem_name << ", " << m_reader_sem_name << std::endl;
         if (sem_post(m_writer_sem) == -1)
         {
             std::cout << "Couldn't post writer semaphore." << std::endl;
             sem_close(m_reader_sem);
             closeShmem();
-            return 0;
+            return false;
         }
         if (sem_post(m_reader_sem) == -1)
         {
             std::cout << "Couldn't post reader semaphore." << std::endl;
             sem_close(m_reader_sem);
             closeShmem();
-            return 0;
+            return false;
         }
     }
-    return 1;
+    return true;
 }
 
 template <typename T>
@@ -230,46 +226,49 @@ bool ShmemHandler<T>::openShmem()
             m_reader_blocker_fd = shm_open(m_reader_blocking_shmem_name.c_str(), O_RDWR, 0666);
             if (m_shmem_fd < 0)
             {
-                std::cout << "Couldn't open shmem fd." << std::endl;
-                // std::this_thread::sleep_for(std::chrono::seconds(1));
+                std::cout << "Couldn't open shmem fd: " + m_shmem_name_with_id << std::endl;
                 closeShmem();
-                return 0;
+                return false;
             }
             m_data = (T *)mmap(0, m_shmem_data_size, PROT_READ | PROT_WRITE, MAP_SHARED, m_shmem_fd, 0);
             m_reader_blocker_crc = (std::uint8_t *)mmap(0, sizeof(std::uint8_t), PROT_READ | PROT_WRITE, MAP_SHARED, m_reader_blocker_fd, 0);
 
+            if (m_data == MAP_FAILED || m_reader_blocker_crc == MAP_FAILED)
+            {
+                std::cout << "mmap failed for shared memory." << std::endl;
+                closeShmem();
+                return false;
+            }
+
             std::cout << "Opening semaphore: " << m_blocking_sem_name << std::endl;
-            if ((m_blocking_sem = sem_open(m_blocking_sem_name.c_str(), 0, 0, 0)) == SEM_FAILED)
+            if ((m_blocking_sem = sem_open(m_blocking_sem_name.c_str(), 0)) == SEM_FAILED)
             {
                 std::cout << "Couldn't open semaphore " + m_blocking_sem_name << std::endl;
-                sem_close(m_blocking_sem);
                 closeShmem();
-                return 0;
+                return false;
             }
             std::cout << "Opening semaphore: " << m_writer_sem_name << std::endl;
-            if ((m_writer_sem = sem_open(m_writer_sem_name.c_str(), 0, 0, 0)) == SEM_FAILED)
+            if ((m_writer_sem = sem_open(m_writer_sem_name.c_str(), 0)) == SEM_FAILED)
             {
                 std::cout << "Couldn't open semaphore " + m_writer_sem_name << std::endl;
-                sem_close(m_writer_sem);
                 closeShmem();
-                return 0;
+                return false;
             }
             std::cout << "Opening semaphore: " << m_reader_sem_name << std::endl;
-            if ((m_reader_sem = sem_open(m_reader_sem_name.c_str(), 0, 0, 0)) == SEM_FAILED)
+            if ((m_reader_sem = sem_open(m_reader_sem_name.c_str(), 0)) == SEM_FAILED)
             {
                 std::cout << "Couldn't open semaphore " + m_reader_sem_name << std::endl;
-                sem_close(m_reader_sem);
                 closeShmem();
-                return 0;
+                return false;
             }
             m_is_shmem_opened = true;
             std::cout << "Shmem opened." << std::endl;
-            return 1;
+            return true;
         }
-        return 1;
+        return true;
     }
     std::cout << "Error occured during opening shared memory." << std::endl;
-    return 0;
+    return false;
 }
 
 template <typename T>
@@ -283,7 +282,7 @@ bool ShmemHandler<T>::shmemWrite(const T * data, const bool blocking)
         }
         else
         {
-            return 0;
+            return false;
         }
     }
     else
@@ -299,36 +298,20 @@ bool ShmemHandler<T>::writeOperation(const T * data, const bool blocking)
     uint8_t crc_confirm = 0;
     if (blocking)
     {
-        std::uint8_t * int_data_cast = (std::uint8_t *)data;
+        const std::uint8_t * int_data_cast = reinterpret_cast<const std::uint8_t *>(data);
         for (std::uint32_t i = 0; i < m_shmem_data_size; ++i)
         {
             crc += int_data_cast[i];
         }
     }
 
-    if (sem_wait(m_writer_sem) == -1)
-    {
-        std::cout << "sem_wait for writer semaphore failed." << std::endl;
-        return 0;
-    }
-    if (sem_post(m_reader_sem) == -1)
-    {
-        std::cout << "sem_post post for reader semaphore failed." << std::endl;
-        return 0;
-    }
+    if (!safeSemWait<T>(m_writer_sem, m_writer_sem_name)) return false;
+    if (!safeSemPost<T>(m_reader_sem, m_reader_sem_name)) return false;
 
     std::memcpy(m_data, data, m_shmem_data_size);
 
-    if (sem_wait(m_reader_sem) == -1)
-    {
-        std::cout << "sem_wait for reader semaphore failed." << std::endl;
-        return 0;
-    }
-    if (sem_post(m_writer_sem) == -1)
-    {
-        std::cout << "sem_post for writer semaphore failed." << std::endl;
-        return 0;
-    }
+    if (!safeSemWait<T>(m_reader_sem, m_reader_sem_name)) return false;
+    if (!safeSemPost<T>(m_writer_sem, m_writer_sem_name)) return false;
 
     if (blocking)
     {
@@ -336,27 +319,14 @@ bool ShmemHandler<T>::writeOperation(const T * data, const bool blocking)
         std::int64_t timeout = 0;
         while (!was_read && timeout < 5000)
         {
-            if (sem_wait(m_reader_sem) == -1)
-            {
-                std::cout << "sem_wait for reader semaphore failed." << std::endl;
-                return 0;
-            }
-            if (sem_post(m_writer_sem) == -1)
-            {
-                std::cout << "sem_post for writer semaphore failed." << std::endl;
-                return 0;
-            }
+            if (!safeSemWait<T>(m_reader_sem, m_reader_sem_name)) return false;
+            if (!safeSemPost<T>(m_writer_sem, m_writer_sem_name)) return false;
+
             std::memcpy(&crc_confirm, m_reader_blocker_crc, sizeof(std::uint8_t));
-            if (sem_wait(m_writer_sem) == -1)
-            {
-                std::cout << "sem_wait for writer semaphore failed." << std::endl;
-                return 0;
-            }
-            if (sem_post(m_reader_sem) == -1)
-            {
-                std::cout << "sem_post for reader semaphore failed." << std::endl;
-                return 0;
-            }
+
+            if (!safeSemWait<T>(m_writer_sem, m_writer_sem_name)) return false;
+            if (!safeSemPost<T>(m_reader_sem, m_reader_sem_name)) return false;
+
             if (crc == crc_confirm)
             {
                 std::cout << "Blocked message read." << std::endl;
@@ -368,11 +338,10 @@ bool ShmemHandler<T>::writeOperation(const T * data, const bool blocking)
         if (timeout == 5000)
         {
             std::cout << "Timeout reached." << std::endl;
-            return 0;
+            return false;
         }
     }
-
-    return 1;
+    return true;
 }
 
 template <typename T>
@@ -386,7 +355,7 @@ bool ShmemHandler<T>::shmemRead(T * data, const bool blocking)
         }
         else
         {
-            return 0;
+            return false;
         }
     }
     else
@@ -400,60 +369,32 @@ bool ShmemHandler<T>::readOperation(T * data, const bool blocking)
 {
     uint8_t crc = 1;
 
-    if (sem_wait(m_reader_sem) == -1)
-    {
-        std::cout << "sem_wait for reader semaphore failed." << std::endl;
-        return 0;
-    }
-    if (sem_post(m_writer_sem) == -1)
-    {
-        std::cout << "sem_post for writer semaphore failed." << std::endl;
-        return 0;
-    }
+    if (!safeSemWait<T>(m_reader_sem, m_reader_sem_name)) return false;
+    if (!safeSemPost<T>(m_writer_sem, m_writer_sem_name)) return false;
 
     std::memcpy(data, m_data, m_shmem_data_size);
 
     if (blocking)
     {
-        std::uint8_t * int_data_cast = (std::uint8_t *)data;
+        const std::uint8_t * int_data_cast = reinterpret_cast<const std::uint8_t *>(data);
         for (std::uint32_t i = 0; i < m_shmem_data_size; ++i)
         {
             crc += int_data_cast[i];
         }
-        if (sem_wait(m_writer_sem) == -1)
-        {
-            std::cout << "sem_wait for writer semaphore failed." << std::endl;
-            return 0;
-        }
-        if (sem_post(m_reader_sem) == -1)
-        {
-            std::cout << "sem_post post for reader semaphore failed." << std::endl;
-            return 0;
-        }
+
+        if (!safeSemWait<T>(m_writer_sem, m_writer_sem_name)) return false;
+        if (!safeSemPost<T>(m_reader_sem, m_reader_sem_name)) return false;
+
         std::memcpy(m_reader_blocker_crc, &crc, sizeof(std::uint8_t));
-        if (sem_wait(m_reader_sem) == -1)
-        {
-            std::cout << "sem_wait for reader semaphore failed." << std::endl;
-            return 0;
-        }
-        if (sem_post(m_writer_sem) == -1)
-        {
-            std::cout << "sem_post for writer semaphore failed." << std::endl;
-            return 0;
-        }
+
+        if (!safeSemWait<T>(m_reader_sem, m_reader_sem_name)) return false;
+        if (!safeSemPost<T>(m_writer_sem, m_writer_sem_name)) return false;
     }
 
-    if (sem_wait(m_writer_sem) == -1)
-    {
-        std::cout << "sem_wait for writer semaphore failed." << std::endl;
-        return 0;
-    }
-    if (sem_post(m_reader_sem) == -1)
-    {
-        std::cout << "sem_post for reader semaphore failed." << std::endl;
-        return 0;
-    }
-    return 1;
+    if (!safeSemWait<T>(m_writer_sem, m_writer_sem_name)) return false;
+    if (!safeSemPost<T>(m_reader_sem, m_reader_sem_name)) return false;
+
+    return true;
 }
 
 template <typename T>
@@ -463,43 +404,85 @@ bool ShmemHandler<T>::readShmemId()
     if (!ifs.is_open())
     {
         std::cout << "Failed to open " << m_shmem_identifier_path << std::endl;
-        // std::this_thread::sleep_for(std::chrono::seconds(1));
+        return false;
     }
-    else
+
+    std::string obtained_pid;
+    getline(ifs, obtained_pid);
+    if (obtained_pid != m_identifier_num)
     {
-        std::string obtained_pid;
-        getline(ifs, obtained_pid);
-        if (obtained_pid.compare(m_identifier_num) != 0)
-        {
-            m_is_shmem_opened = false;
-            std::cout << "Reading shmem owner process PID." << std::endl;
-            m_identifier_num = obtained_pid;
-            std::cout << "Obtained PID: " << m_identifier_num << std::endl;
-            m_writer_sem_name = m_writer_sem_prefix + m_shmem_name + m_identifier_num;
-            m_reader_sem_name = m_reader_sem_prefix + m_shmem_name + m_identifier_num;
-            m_blocking_sem_name = m_blocking_sem_prefix + m_shmem_name + m_identifier_num;
-            m_shmem_name_with_id = m_shmem_name + m_identifier_num;
-            m_reader_blocking_shmem_name = DataTypes::SHMEM_READER_BLOCKER_NAME + m_shmem_name + m_identifier_num;
-            return 1;
-        }
-        return 1;
+        m_is_shmem_opened = false;
+        m_identifier_num = obtained_pid;
+
+        std::cout << "Reading shmem owner process PID: " << m_identifier_num << std::endl;
+
+        m_writer_sem_name = m_writer_sem_prefix + m_shmem_name + m_identifier_num;
+        m_reader_sem_name = m_reader_sem_prefix + m_shmem_name + m_identifier_num;
+        m_blocking_sem_name = m_blocking_sem_prefix + m_shmem_name + m_identifier_num;
+        m_shmem_name_with_id = m_shmem_name + m_identifier_num;
+        m_reader_blocking_shmem_name = DataTypes::SHMEM_READER_BLOCKER_NAME + m_shmem_name + m_identifier_num;
     }
-    return 0;
+
+    return true;
+}
+
+template <typename T>
+bool ShmemHandler<T>::safeSemWait(sem_t* sem, const std::string& sem_name)
+{
+    if (sem_wait(sem) == -1)
+    {
+        std::cerr << "sem_wait failed on [" << sem_name << "]: " << strerror(errno) << std::endl;
+        return false;
+    }
+    return true;
+}
+
+template <typename T>
+bool ShmemHandler<T>::safeSemPost(sem_t* sem, const std::string& sem_name)
+{
+    if (sem_post(sem) == -1)
+    {
+        std::cerr << "sem_post failed on [" << sem_name << "]: " << strerror(errno) << std::endl;
+        return false;
+    }
+    return true;
 }
 
 template <typename T>
 void ShmemHandler<T>::closeShmem()
 {
-    if (fcntl(m_shmem_fd, F_GETFD) != -1 || errno != EBADF)
+    // Unmap shared memory
+    if (m_data && m_data != MAP_FAILED)
+    {
+        munmap(m_data, m_shmem_data_size);
+        m_data = nullptr;
+    }
+    if (m_reader_blocker_crc && m_reader_blocker_crc != MAP_FAILED)
+    {
+        munmap(m_reader_blocker_crc, sizeof(std::uint8_t));
+        m_reader_blocker_crc = nullptr;
+    }
+
+    // Close semaphores
+    if (m_writer_sem) { sem_close(m_writer_sem); m_writer_sem = nullptr; }
+    if (m_reader_sem) { sem_close(m_reader_sem); m_reader_sem = nullptr; }
+    if (m_blocking_sem) { sem_close(m_blocking_sem); m_blocking_sem = nullptr; }
+
+    // Close and unlink SHMEM
+    if (m_shmem_fd >= 0)
     {
         close(m_shmem_fd);
-        shm_unlink(m_shmem_name_with_id.c_str());
+        if (m_is_owner) shm_unlink(m_shmem_name_with_id.c_str());
+        m_shmem_fd = -1;
     }
-    if (fcntl(m_reader_blocker_fd, F_GETFD) != -1 || errno != EBADF)
+    if (m_reader_blocker_fd >= 0)
     {
-        close(m_shmem_fd);
-        shm_unlink(m_reader_blocking_shmem_name.c_str());
+        close(m_reader_blocker_fd);
+        if (m_is_owner) shm_unlink(m_reader_blocking_shmem_name.c_str());
+        m_reader_blocker_fd = -1;
     }
+
+    m_is_shmem_opened = false;
 }
 
 template <typename T>

@@ -131,7 +131,7 @@ std::int8_t InetCommHandler<T>::createTcpServer()
     int reuse_port = 1;
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEPORT, &reuse_port, sizeof(reuse_port)) == -1) {
         if (errno != ENOPROTOOPT) {
-            std::cerr << "Error setting SO_REUSEPORT: " << strerror(errno) << std::endl;
+            std::cout << "Error setting SO_REUSEPORT: " << strerror(errno) << std::endl;
             close(m_sockfd);
             m_sockfd = -1;
             return -1;
@@ -142,12 +142,12 @@ std::int8_t InetCommHandler<T>::createTcpServer()
     {
         if (errno == EADDRINUSE)
         {
-            std::cerr << "Port " << m_port << " already in use. "
+            std::cout << "Port " << m_port << " already in use. "
                       << "Make sure no other process is using this port." << std::endl;
         }
         else
         {
-            std::cerr << "Binding server socket error: " << strerror(errno) << std::endl;
+            std::cout << "Binding server socket error: " << strerror(errno) << std::endl;
         }
 
         close(m_sockfd);
@@ -174,9 +174,9 @@ std::int8_t InetCommHandler<T>::createTcpServer()
     }
     else
     {
-        std::cerr << "getsockname() failed: " << strerror(errno) << std::endl;
+        std::cout << "getsockname() failed: " << strerror(errno) << std::endl;
     }
-
+    std::cout << "TCP server created." << std::endl;
     return 0;
 }
 
@@ -232,7 +232,7 @@ std::int8_t InetCommHandler<T>::createTcpClientSocket()
     m_servaddr.sin_port = htons(m_port);
     if (inet_pton(AF_INET, m_server_ip.c_str(), &m_servaddr.sin_addr) <= 0)
     {
-        std::cerr << "Invalid address or address not supported: " << m_server_ip << std::endl;
+        std::cout << "Invalid address or address not supported: " << m_server_ip << std::endl;
         close(m_sockfd);
         m_sockfd = -1;
         return -1;
@@ -249,7 +249,7 @@ std::int8_t InetCommHandler<T>::createTcpClientSocket()
     int reuse_port = 1;
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEPORT, &reuse_port, sizeof(reuse_port)) == -1) {
         if (errno != ENOPROTOOPT) {
-            std::cerr << "Error setting SO_REUSEPORT: " << strerror(errno) << std::endl;
+            std::cout << "Error setting SO_REUSEPORT: " << strerror(errno) << std::endl;
             close(m_sockfd);
             m_sockfd = -1;
             return -1;
