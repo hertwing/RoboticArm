@@ -5,11 +5,13 @@
 #include <chrono>
 #include <thread>
 #include <iostream>
+#include <signal.h>
 
 #define MAX_BUFF 1024
 
 int main()
 {
+    signal(SIGPIPE, SIG_IGN);
     InetCommHandler<odin::diagnostic_handler::DiagnosticData> inet_comm_handler(sizeof(odin::diagnostic_handler::DiagnosticData), 7073, "192.168.1.41");
 
     odin::diagnostic_handler::DiagnosticData dd_send;

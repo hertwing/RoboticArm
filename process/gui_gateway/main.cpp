@@ -6,6 +6,7 @@ using namespace odin::gui_gateway;
 
 int main(int argc, char * argv[])
 {
+    signal(SIGPIPE, SIG_IGN);
     GuiGateway gui_gateway;
     signal(SIGINT, GuiGateway::signalCallbackHandler);
     gui_gateway.runProcess(argc, argv);

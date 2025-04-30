@@ -6,7 +6,7 @@
 #include <string>
 
 // TODO: Set fixed IP on RPI boards
-const std::string ROBOTIC_ARM_IP = "192.168.1.32";
+const std::string ROBOTIC_ARM_IP = "192.168.1.37";
 const std::string ROBOTIC_GUI_IP = "192.168.1.41";
 
 static constexpr std::uint16_t DIAGNOSTIC_SOCKET_PORT = 7071;
