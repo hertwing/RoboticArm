@@ -56,12 +56,12 @@ private:
     int m_current_servo_l = 1;
     int m_current_servo_r = 0;
 
-    automatic_movement_status_t m_automatic_movement_status;
+    scripted_motion_status_t m_scripted_motion_status;
 
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<JoypadData>> m_joypad_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<ws2811_led_t>> m_led_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
-    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<automatic_movement_status_t>> m_automatic_execute_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<scripted_motion_status_t>> m_automatic_execute_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinServoStep>> m_automatic_step_shmem_handler;
 
     // TODO: move those kind of values to some config file

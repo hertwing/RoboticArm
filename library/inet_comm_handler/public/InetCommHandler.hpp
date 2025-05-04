@@ -31,10 +31,10 @@ public:
     std::int8_t acceptClient();
     std::int8_t createTcpClientSocket();
 
-    bool serverRead(T * buffer);
+    std::int8_t serverRead(T * buffer);
     bool serverWrite(const T * buffer);
 
-    bool clientRead(T * buffer);
+    std::int8_t clientRead(T * buffer);
     bool clientWrite(const T * buffer);
     static void signalCallbackHandler(int signum);
 
@@ -96,9 +96,9 @@ InetCommHandler<T>::InetCommHandler(std::uint64_t buffer_size, const std::uint16
 template <typename T>
 InetCommHandler<T>::~InetCommHandler()
 {
-    close(m_sockfd);
+    if (m_sockfd >= 0) close(m_sockfd);
+    if (m_connfd >= 0) close(m_connfd);
     m_sockfd = -1;
-    close(m_connfd);
     m_connfd = -1;
 }
 
@@ -164,18 +164,25 @@ std::int8_t InetCommHandler<T>::createTcpServer()
     }
 
     struct sockaddr_in actual_addr;
-    socklen_t len = sizeof(actual_addr);
-    if (getsockname(m_sockfd, (struct sockaddr*)&actual_addr, &len) == 0)
-    {
-        char ip_str[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &(actual_addr.sin_addr), ip_str, INET_ADDRSTRLEN);
-        std::cout << "Server listening on " << ip_str
-                << ":" << ntohs(actual_addr.sin_port) << std::endl;
+    char hostbuffer[256];
+    if (gethostname(hostbuffer, sizeof(hostbuffer)) == 0) {
+        struct hostent *host_entry = gethostbyname(hostbuffer);
+        if (host_entry && host_entry->h_addrtype == AF_INET)
+        {
+            struct sockaddr_in actual_addr;
+            socklen_t len = sizeof(actual_addr);
+            if (getsockname(m_sockfd, (struct sockaddr*)&actual_addr, &len) == 0) {
+                char ip[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &actual_addr.sin_addr, ip, sizeof(ip));
+                std::cout << "Server listening on " << ip << ":" << ntohs(actual_addr.sin_port) << std::endl;
+            }
+        }
     }
     else
     {
-        std::cout << "getsockname() failed: " << strerror(errno) << std::endl;
+        std::cout << "gethostname() failed: " << strerror(errno) << std::endl;
     }
+
     std::cout << "TCP server created." << std::endl;
     return 0;
 }
@@ -190,6 +197,12 @@ std::int8_t InetCommHandler<T>::acceptClient()
 
     std::cout << "Accepting client..." << std::endl;
 
+    if (m_sockfd < 0)
+    {
+        std::cerr << "[ERROR] Cannot accept client: server socket is invalid." << std::endl;
+        return -1;
+    }
+
     while (m_run_process)
     {
         m_connfd = accept(m_sockfd, NULL, NULL);
@@ -199,6 +212,18 @@ std::int8_t InetCommHandler<T>::acceptClient()
             {
                 std::cout << "Accept interrupted by signal, retrying..." << std::endl;
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                continue;
+            }
+            else if (errno == EBADF || errno == EINVAL)
+            {
+                std::cerr << "Socket invalid or closed. Attempting to recreate server socket..." << std::endl;
+                close(m_sockfd);
+                m_sockfd = -1;
+                if (createTcpServer() != 0)
+                {
+                    std::cerr << "Recreating server socket failed." << std::endl;
+                    return -1;
+                }
                 continue;
             }
             std::cout << "Error when accepting client: " << strerror(errno) << std::endl;
@@ -269,11 +294,11 @@ std::int8_t InetCommHandler<T>::createTcpClientSocket()
 }
 
 template <typename T>
-bool InetCommHandler<T>::serverRead(T * buff)
+std::int8_t InetCommHandler<T>::serverRead(T * buff)
 {
     if (!handleConnection())
     {
-        return false;
+        return -1;
     }
     fd_set readSet;
     struct timeval timeout;
@@ -281,35 +306,41 @@ bool InetCommHandler<T>::serverRead(T * buff)
     FD_ZERO(&readSet);
     FD_SET(m_connfd, &readSet);
 
-    timeout.tv_sec = 2;
-    timeout.tv_usec = 0;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100000;
 
     int result = select(m_connfd + 1, &readSet, NULL, NULL, &timeout);
     if (result == -1)
     {
         std::cout << "Error during select when reading message: " << strerror(errno) << std::endl;
         disconnectAndWaitForNewClient();
-        return false;
+        return -1;
     }
     else if (result == 0)
     {
-        return false;
+        return 0;
     }
 
-    result = recv(m_connfd, buff, m_buffer_size, MSG_PEEK | MSG_DONTWAIT);
-    if (result == 0)
+    size_t total_received = 0;
+    char* data = reinterpret_cast<char*>(buff);
+
+    while (total_received < m_buffer_size)
     {
-        std::cout << "Client has closed the connection." << std::endl;
-        disconnectAndWaitForNewClient();
-        return false;
+        ssize_t received = recv(m_connfd, data + total_received, m_buffer_size - total_received, 0);
+        if (received == 0) {
+            std::cout << "Client closed connection." << std::endl;
+            disconnectAndWaitForNewClient();
+            return -1;
+        }
+        else if (received < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            std::cout << "Error when reading from client: " << strerror(errno) << std::endl;
+            disconnectAndWaitForNewClient();
+            return -1;
+        }
+        total_received += received;
     }
-    else if (result < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
-    {
-        std::cout << "Error when reading from client: " << strerror(errno) << std::endl;
-        disconnectAndWaitForNewClient();
-        return false;
-    }
-    return true;
+    return 1;
 }
 
 template <typename T>
@@ -325,8 +356,8 @@ bool InetCommHandler<T>::serverWrite(const T * buff)
     FD_ZERO(&writeSet);
     FD_SET(m_connfd, &writeSet);
 
-    timeout.tv_sec = 2;
-    timeout.tv_usec = 0;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100000;
 
     int result = select(m_connfd + 1, NULL, &writeSet, NULL, &timeout);
     if (result == -1)
@@ -337,7 +368,7 @@ bool InetCommHandler<T>::serverWrite(const T * buff)
     }
     else if (result == 0)
     {
-        return false;
+        return 0;
     }
 
     size_t total_sent = 0;
@@ -365,11 +396,11 @@ bool InetCommHandler<T>::serverWrite(const T * buff)
 }
 
 template <typename T>
-bool InetCommHandler<T>::clientRead(T * buff)
+std::int8_t InetCommHandler<T>::clientRead(T * buff)
 {
     if (!handleConnection())
     {
-        return 0;
+        return -1;
     }
     fd_set readSet;
     struct timeval timeout;
@@ -377,35 +408,44 @@ bool InetCommHandler<T>::clientRead(T * buff)
     FD_ZERO(&readSet);
     FD_SET(m_sockfd, &readSet);
 
-    timeout.tv_sec = 2;
-    timeout.tv_usec = 0;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100000;
 
     int result = select(m_sockfd + 1, &readSet, NULL, NULL, &timeout);
     if (result == -1)
     {
         std::cout << "Error during select when reading message: " << strerror(errno) << std::endl;
         reconnectToServer();
-        return false;
+        return -1;
     }
     else if (result == 0)
     {
-        return false;
+        return 0;
     }
-    result = recv(m_sockfd, buff, m_buffer_size, MSG_DONTWAIT);
 
-    if (result == 0)
+    size_t total_received = 0;
+    char* data = reinterpret_cast<char*>(buff);
+
+    while (total_received < m_buffer_size)
     {
-        std::cout << "Server closed the connection." << std::endl;
-        reconnectToServer();
-        return false;
+        ssize_t received = recv(m_sockfd, data + total_received, m_buffer_size - total_received, 0);
+        if (received == 0)
+        {
+            std::cout << "Client closed connection." << std::endl;
+            reconnectToServer();
+            return -1;
+        }
+        else if (received < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            std::cout << "Error when reading from client: " << strerror(errno) << std::endl;
+            reconnectToServer();
+            return -1;
+        }
+        total_received += received;
     }
-    else if (result < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
-    {
-        std::cout << "Error when reading from server: " << strerror(errno) << std::endl;
-        reconnectToServer();
-        return false;
-    }
-    return true;
+
+    return 1;
 }
 
 template <typename T>
@@ -421,8 +461,8 @@ bool InetCommHandler<T>::clientWrite(const T * buff)
     FD_ZERO(&writeSet);
     FD_SET(m_sockfd, &writeSet);
 
-    timeout.tv_sec = 2;
-    timeout.tv_usec = 0;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 100000;
 
     int result = select(m_sockfd + 1, NULL, &writeSet, NULL, &timeout);
     if (result == -1)
@@ -490,6 +530,7 @@ void InetCommHandler<T>::disconnectAndWaitForNewClient()
 template <typename T>
 void InetCommHandler<T>::reconnectToServer()
 {
+    std::cout << "RECONECTING TO SERVER!" << std::endl;
     close(m_sockfd);
     m_sockfd = -1;
     while(createTcpClientSocket() != 0 && m_run_process)

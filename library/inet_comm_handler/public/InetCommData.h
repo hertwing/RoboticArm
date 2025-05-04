@@ -14,7 +14,7 @@ static constexpr std::uint16_t CONTROL_SELECTION_PORT = 7072;
 static constexpr std::uint16_t AUTOMATIC_EXECUTION_PORT = 7073;
 static constexpr std::uint16_t AUTOMATIC_SERVO_STEP_PORT = 7074;
 
-typedef std::uint8_t automatic_movement_status_t;
+typedef std::uint8_t scripted_motion_status_t;
 
 // TODO: Rewrite to cinfig file
 enum class ControlSelection
@@ -25,15 +25,23 @@ enum class ControlSelection
     DIAGNOSTIC
 };
 
-enum AutomaticMovementStatus
+enum class ScriptedMotionRequestStatus
 {
     NONE,
-    START_SENDING,
-    SEND_SUCCESS,
-    SEND_DONE,
-    RECEIVE_SUCCESS,
-    RECEIVE_DONE,
-    SEND_FAIL
+    START_REQUEST,
+    EXECUTE_ON_ARM,
+    REQUEST_COMPLETE,
+    STOP_REQUESTED
+};
+
+enum class ScriptedMotionReplyStatus
+{
+    NONE,
+    WAITING,
+    IN_PROGRESS,
+    COMPLETED,
+    ERROR,
+    DISCONNECTED
 };
 
 struct OdinControlSelection
@@ -58,19 +66,17 @@ struct OdinControlSelection
 
 struct OdinServoStep
 {
-    OdinServoStep()
-    {
-        step_num = -1;
-        servo_num = 0;
-        position = 0;
-        delay = 0;
-        speed = 0;
-    }
-    int step_num;
+    std::uint64_t step_num;
     std::uint8_t servo_num;
     std::uint16_t position;
     std::uint64_t delay;
     std::uint8_t speed;
+};
+
+struct ScriptedMotionStepStatus
+{
+    std::uint64_t step_num;
+    scripted_motion_status_t step_status;
 };
 
 #endif // INETCOMMDATA_H

@@ -19,11 +19,14 @@ find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Charts)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Charts)
 
 set(PROJECT_SOURCES
-        main.cpp
-        mainwindow.cpp
-        mainwindow.h
-        mainwindow.ui
+    main.cpp
+    mainwindow.cpp
+    mainwindow.h
+    mainwindow.ui
+    public/ScriptedMotionWorker.h
+    private/ScriptedMotionWorker.cpp
 )
+
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(${PROJECT_NAME}
@@ -48,6 +51,11 @@ else()
         )
     endif()
 endif()
+
+target_include_directories(${PROJECT_NAME}
+        PRIVATE private
+        PUBLIC public
+)
 
 target_link_libraries(${PROJECT_NAME}
     PRIVATE Qt${QT_VERSION_MAJOR}::Widgets

@@ -17,12 +17,12 @@ bool ServoManager::m_run_process = true;
 
 ServoManager::ServoManager() :
     m_servo_controller(),
-    m_automatic_movement_status(AutomaticMovementStatus::NONE)
+    m_scripted_motion_status(static_cast<std::uint8_t>(ScriptedMotionRequestStatus::NONE))
 {
-    m_automatic_execute_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<automatic_movement_status_t>>(
-        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_SHMEM_NAME, sizeof(automatic_movement_status_t), false);
+    m_automatic_execute_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<scripted_motion_status_t>>(
+        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REQUEST_STATUS_SHMEM_NAME, sizeof(scripted_motion_status_t), false);
     m_automatic_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
-        odin::shmem_wrapper::DataTypes::AUTOMATIC_STEP_SHMEM_NAME, sizeof(OdinServoStep), false);
+        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_SERVO_STEP_SHMEM_NAME, sizeof(OdinServoStep), false);
     m_joypad_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<JoypadData>>(
         odin::shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, sizeof(JoypadData), false);
     m_led_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<ws2811_led_t>>(
@@ -299,46 +299,46 @@ void ServoManager::updateLedColors(std::uint8_t led_options)
 void ServoManager::handleAutomaticData()
 {
     // OdinAutomaticExecuteData automatic_execute_data;
-    if (m_automatic_execute_shmem_handler->openShmem())
-    {
-        m_automatic_execute_shmem_handler->shmemRead(&m_automatic_movement_status);
-        if (m_automatic_movement_status == AutomaticMovementStatus::START_SENDING)
-        {
-            m_automatic_movement_done = false;
-            updateLedColors(LedOption::AUTOAMTIC_EXECUTE);
-            if (m_automatic_step_shmem_handler->openShmem())
-            {
-                if (m_automatic_step_shmem_handler->shmemRead(&m_automatic_servo_step))
-                {
-                    std::cout << "Reading step." << std::endl;
+    // if (m_automatic_execute_shmem_handler->openShmem())
+    // {
+    //     m_automatic_execute_shmem_handler->shmemRead(&m_scripted_motion_status);
+    //     if (m_scripted_motion_status == AutomaticMovementStatus::START_SENDING)
+    //     {
+    //         m_automatic_movement_done = false;
+    //         updateLedColors(LedOption::AUTOAMTIC_EXECUTE);
+    //         if (m_automatic_step_shmem_handler->openShmem())
+    //         {
+    //             if (m_automatic_step_shmem_handler->shmemRead(&m_automatic_servo_step))
+    //             {
+    //                 std::cout << "Reading step." << std::endl;
 
-                    std::cout << m_automatic_servo_step.step_num << std::endl;
-                    std::cout << +m_automatic_servo_step.servo_num << std::endl;
-                    std::cout << m_automatic_servo_step.position << std::endl;
-                    std::cout << +m_automatic_servo_step.speed << std::endl;
-                    std::cout << m_automatic_servo_step.delay << std::endl;
-                    // m_automatic_steps.emplace_back(servo_step);
+    //                 std::cout << m_automatic_servo_step.step_num << std::endl;
+    //                 std::cout << +m_automatic_servo_step.servo_num << std::endl;
+    //                 std::cout << m_automatic_servo_step.position << std::endl;
+    //                 std::cout << +m_automatic_servo_step.speed << std::endl;
+    //                 std::cout << m_automatic_servo_step.delay << std::endl;
+    //                 // m_automatic_steps.emplace_back(servo_step);
 
-                    m_servo_controller.setAbsolutePosition(m_automatic_servo_step.position, m_automatic_servo_step.servo_num-1, m_automatic_servo_step.speed);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(m_automatic_servo_step.delay));
+    //                 m_servo_controller.setAbsolutePosition(m_automatic_servo_step.position, m_automatic_servo_step.servo_num-1, m_automatic_servo_step.speed);
+    //                 std::this_thread::sleep_for(std::chrono::milliseconds(m_automatic_servo_step.delay));
 
-                    m_automatic_movement_status = AutomaticMovementStatus::RECEIVE_SUCCESS;
-                    m_automatic_execute_shmem_handler->shmemWrite(&m_automatic_movement_status);
-                }
-                else
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
-            }
-        }
-        else if (m_automatic_movement_status == AutomaticMovementStatus::SEND_DONE && !m_automatic_movement_done)
-        {
-            updateLedColors(LedOption::AUTOMATIC_READY);
-            m_automatic_movement_done = true;
-            m_automatic_movement_status = AutomaticMovementStatus::RECEIVE_DONE;
-            m_automatic_execute_shmem_handler->shmemWrite(&m_automatic_movement_status);
-        }
-    }
+    //                 m_scripted_motion_status = AutomaticMovementStatus::RECEIVE_SUCCESS;
+    //                 m_automatic_execute_shmem_handler->shmemWrite(&m_scripted_motion_status);
+    //             }
+    //             else
+    //             {
+    //                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    //             }
+    //         }
+    //     }
+    //     else if (m_scripted_motion_status == AutomaticMovementStatus::SEND_DONE && !m_automatic_movement_done)
+    //     {
+    //         updateLedColors(LedOption::AUTOMATIC_READY);
+    //         m_automatic_movement_done = true;
+    //         m_scripted_motion_status = AutomaticMovementStatus::RECEIVE_DONE;
+    //         m_automatic_execute_shmem_handler->shmemWrite(&m_scripted_motion_status);
+    //     }
+    // }
 
     // if (m_automatic_steps.size())
     // {

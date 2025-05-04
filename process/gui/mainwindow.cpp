@@ -12,9 +12,10 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTimer>
+#include <QThread>
 
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent),
+MainWindow::MainWindow(QWidget * parent):
+    QMainWindow(parent),
     ui(new Ui::MainWindow),
     m_joypad_enabled(false),
     m_automatic_enabled(false),
@@ -28,31 +29,31 @@ MainWindow::MainWindow(QWidget *parent)
     m_is_delay_valid(false),
     m_run_in_loop(false),
     m_is_automatic_steps_work(false),
-    m_is_automatic_work_paused(false),
-    m_automatic_movement_status(AutomaticMovementStatus::NONE),
-    m_automatic_file_path(std::filesystem::path(odin::shmem_wrapper::DataTypes::AUTOMATIC_FILES_PATH))
+    m_scripted_motion_files_path(std::filesystem::path(odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_FILES_PATH))
 {
     ui->setupUi(this);
-
+    
+    m_scripted_motion_request_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::NONE));
+    m_scripted_motion_reply_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::NONE));
+    m_automatic_steps = std::make_shared<std::vector<OdinServoStep>>();
+    
     scan_automatic_files();
 
     m_automatic_steps_count = ui->table_servo_steps->rowCount();
     // Shmem readers and writers
-    m_automatic_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
-        odin::shmem_wrapper::DataTypes::AUTOMATIC_STEP_SHMEM_NAME, sizeof(OdinServoStep), true);
+    std::cout << "Creating SHMEM readers and writers" << std::endl;
+    std::cout << "Creating control selection SHMEM fd." << std::endl;
     m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>>(
         odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), true);
-    m_automatic_execute_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<automatic_movement_status_t>>(
-        odin::shmem_wrapper::DataTypes::AUTOMATIC_EXECUTE_SHMEM_NAME, sizeof(automatic_movement_status_t), true);
+    std::cout << "Control selection SHMEM fd created." << std::endl;
+    std::cout << "Creating GUI diagnostic data SHMEM fd." << std::endl;
     m_gui_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), false);
+    std::cout << "GUI diagnostic data SHMEM fd created." << std::endl;
+    std::cout << "Creating ARM diagnostic data SHMEM fd." << std::endl;
     m_arm_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME, sizeof(DiagnosticData), false);
-
-    // Fill shmem data with initial values
-    // TODO: write a method for that
-    OdinServoStep tmp_step;
-    m_automatic_step_shmem_handler->shmemWrite(&tmp_step);
+    std::cout << "ARM diagnostic data SHMEM fd created." << std::endl;
 
     m_diagnostic_timer = new QTimer(this);
     m_diagnostic_timer->start(300);
@@ -60,12 +61,38 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
 
+    m_motionThread = new QThread;
+    m_motionWorker = new ScriptedMotionWorker;
+
+    m_motionWorker->setStatusPointer(m_scripted_motion_request_status);
+    m_motionWorker->setStepsVectorPtr(m_automatic_steps);
+    m_motionWorker->moveToThread(m_motionThread);
+
+    // connect(m_motionThread, &QThread::started, m_motionWorker, &ScriptedMotionWorker::processMotion);
+    connect(m_motionWorker, &ScriptedMotionWorker::motionCompleted, this, &MainWindow::handleMotionCompleted);
+    // connect(m_motionWorker, &ScriptedMotionWorker::motionError, this, &MainWindow::handleMotionError);
+    // connect(m_motionWorker, &ScriptedMotionWorker::motionDisconnected, this, &MainWindow::handleMotionDisconnected);
+    connect(this, &MainWindow::stopScriptedMotionRequested, m_motionWorker, &ScriptedMotionWorker::stopMotion);
+    connect(m_motionWorker, &ScriptedMotionWorker::destroyed, m_motionThread, &QThread::quit);
+    connect(m_motionThread, &QThread::finished, m_motionThread, &QThread::deleteLater);
+
+    m_motionThread->start();
+
     draw_charts();
     draw_menu();
 }
 
 MainWindow::~MainWindow()
 {
+    if (m_motionWorker)
+        m_motionWorker->stopMotion();
+
+    if (m_motionThread)
+    {
+        m_motionThread->quit();
+        m_motionThread->wait();
+    }
+
     const auto * cpu_usage_chart_ptr = ui->chart_view_cpu_usage->chart();
     const auto * ram_usage_chart_ptr = ui->chart_view_ram_usage->chart();
     const auto * cpu_temp_chart_ptr = ui->chart_view_cpu_temp->chart();
@@ -244,7 +271,11 @@ void MainWindow::diagnosticTimerSlot()
     {
         if (m_gui_diagnostic_shmem_handler->openShmem())
         {
-            m_gui_diagnostic_shmem_handler->shmemRead(&m_gui_diagnostic_data);
+            if (!m_gui_diagnostic_shmem_handler->shmemRead(&m_gui_diagnostic_data))
+            {
+                std::cout << "Error while reading from arm diagnostic SHMEM" << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
         }
         else
         {
@@ -258,7 +289,11 @@ void MainWindow::diagnosticTimerSlot()
     {
         if (m_arm_diagnostic_shmem_handler->openShmem())
         {
-            m_arm_diagnostic_shmem_handler->shmemRead(&m_gui_diagnostic_data);
+            if(!m_arm_diagnostic_shmem_handler->shmemRead(&m_gui_diagnostic_data))
+            {
+                std::cout << "Error while reading from arm diagnostic SHMEM" << std::endl;
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
         }
         else
         {
@@ -668,7 +703,7 @@ void MainWindow::on_buton_add_step_clicked()
 
     if (m_is_servo_num_valid && m_is_servo_pos_valid && m_is_servo_speed_valid && m_is_delay_valid)
     {
-
+        // Add code to handle steps limit
         if (m_automatic_steps_count < 1000)
         {
             ++m_automatic_steps_count;
@@ -721,14 +756,14 @@ void MainWindow::on_button_save_clicked()
 {
     try
     {
-        if(!std::filesystem::exists(m_automatic_file_path))
+        if(!std::filesystem::exists(m_scripted_motion_files_path))
         {
-            std::filesystem::create_directories(m_automatic_file_path);
+            std::filesystem::create_directories(m_scripted_motion_files_path);
         }
 
         const std::string file_name = ui->lineEdit_file_name->text().toStdString();
 
-        std::filesystem::path file_path = m_automatic_file_path / file_name;
+        std::filesystem::path file_path = m_scripted_motion_files_path / file_name;
         std::ofstream file(file_path.string());
 
         for (int i = 0; i < ui->table_servo_steps->rowCount(); ++i)
@@ -753,7 +788,8 @@ void MainWindow::on_button_load_clicked()
 {
     try
     {
-        if(std::filesystem::exists(m_automatic_file_path))
+        (*m_automatic_steps).clear();
+        if(std::filesystem::exists(m_scripted_motion_files_path))
         {
             m_automatic_steps_count = 0;
             ui->table_servo_steps->setRowCount(m_automatic_steps_count);
@@ -761,13 +797,13 @@ void MainWindow::on_button_load_clicked()
 
             std::cout << file_name << std::endl;
 
-            std::filesystem::path file_path = m_automatic_file_path / file_name;
+            std::filesystem::path file_path = m_scripted_motion_files_path / file_name;
             std::ifstream file(file_path.string());
 
             std::string data;
 
-            bool work = true;
-            while(work)
+            bool fill_step_table = true;
+            while(fill_step_table)
             {
                 ++m_automatic_steps_count;
                 for (int i = 0; i < ui->table_servo_steps->columnCount(); ++i)
@@ -775,7 +811,7 @@ void MainWindow::on_button_load_clicked()
                     file >> data;
                     if (file.eof())
                     {
-                        work = false;
+                        fill_step_table = false;
                         --m_automatic_steps_count;
                         break;
                     }
@@ -785,6 +821,17 @@ void MainWindow::on_button_load_clicked()
                         QTableWidgetItem * item = new QTableWidgetItem;
                         item->setText(QString::fromStdString(data));
                         ui->table_servo_steps->setItem(m_automatic_steps_count-1, i, item);
+                    }
+                    // Build OdinServoStep and add to steps vector
+                    if (i == ui->table_servo_steps->columnCount()-1)
+                    {
+                        OdinServoStep servo_step;
+                        servo_step.step_num  = m_automatic_steps_count-1;
+                        servo_step.servo_num = ui->table_servo_steps->item(m_automatic_steps_count-1, 0)->text().toInt();
+                        servo_step.position  = ui->table_servo_steps->item(m_automatic_steps_count-1, 1)->text().toInt();
+                        servo_step.speed     = ui->table_servo_steps->item(m_automatic_steps_count-1, 2)->text().toInt();
+                        servo_step.delay     = ui->table_servo_steps->item(m_automatic_steps_count-1, 3)->text().toInt();
+                        (*m_automatic_steps).emplace_back(servo_step);
                     }
                 }
             }
@@ -801,10 +848,10 @@ void MainWindow::scan_automatic_files()
 {
     try
     {
-        if (std::filesystem::exists(m_automatic_file_path))
+        if (std::filesystem::exists(m_scripted_motion_files_path))
         {
             ui->list_automatic_files->clear();
-            for (const auto & entry : std::filesystem::directory_iterator(m_automatic_file_path))
+            for (const auto & entry : std::filesystem::directory_iterator(m_scripted_motion_files_path))
             {
                 ui->list_automatic_files->addItem(QString::fromStdString(entry.path().filename().string()));
             }
@@ -825,83 +872,120 @@ void MainWindow::on_radioButton_loop_toggled(bool checked)
 
 void MainWindow::on_button_execute_clicked()
 {
-    std::thread t([this](){
-        m_message_retries = 0;
-        ui->button_execute->setEnabled(false);
+    ui->button_execute->setEnabled(false);
 
-        if (!m_is_automatic_steps_work && ui->table_servo_steps->rowCount() > 0)
-        {
-            m_is_automatic_steps_work = true;
-            OdinServoStep servo_step;
+    *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::START_REQUEST);
 
-            for (int i = 0; i < ui->table_servo_steps->rowCount();)
-            {
-                while(m_is_automatic_work_paused) {};
-                m_automatic_movement_status = AutomaticMovementStatus::START_SENDING;
+    QMetaObject::invokeMethod(m_motionWorker, "processMotion", Qt::QueuedConnection);
 
-                m_automatic_execute_shmem_handler->shmemWrite(&m_automatic_movement_status);
 
-                while(true)
-                {
-                    m_automatic_execute_shmem_handler->shmemRead(&m_automatic_movement_status);
-                    if (m_automatic_movement_status == AutomaticMovementStatus::SEND_SUCCESS)
-                    {
-                        break;
-                    }
-                }
-                    // std::cout << "Writing data" << std::endl;
-                servo_step.step_num = i;
-                servo_step.servo_num = ui->table_servo_steps->item(i, 0)->text().toInt();
-                servo_step.position = ui->table_servo_steps->item(i, 1)->text().toInt();
-                servo_step.speed = ui->table_servo_steps->item(i, 2)->text().toInt();
-                servo_step.delay = ui->table_servo_steps->item(i, 3)->text().toInt();
-                m_automatic_step_shmem_handler->shmemWrite(&servo_step);
+    // bool start_movement_request = true;
+    // while(!m_scripted_motion_reply_status == static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::COMPLETED) &&
+    //       !m_scripted_motion_reply_status == static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::ERROR) &&
+    //       !m_scripted_motion_reply_status == static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::DISCONNECTED))
+    // {
+    //     if (start_movement_request)
+    //     {
+    //         ui->button_execute->setEnabled(false);
+    //         start_movement_request = false;
+    //     }
+    // }
+    // ui->button_execute->setEnabled(true);
 
-                m_automatic_movement_status = AutomaticMovementStatus::START_SENDING;
-                m_automatic_execute_shmem_handler->shmemWrite(&m_automatic_movement_status);
-                ++i;
 
-                // Wait for message to be send
-                while(true)
-                {
-                    m_automatic_execute_shmem_handler->shmemRead(&m_automatic_movement_status);
-                    if (m_automatic_movement_status == AutomaticMovementStatus::SEND_SUCCESS)
-                    {
-                        break;
-                    }
-                }
+    // std::thread t([this](){
+    //     m_message_retries = 0;
+    //     ui->button_execute->setEnabled(false);
 
-                std::cout << "Sending step finished." << std::endl;
+    //     if (!m_is_automatic_steps_work && ui->table_servo_steps->rowCount() > 0)
+    //     {
+    //         m_is_automatic_steps_work = true;
+    //         OdinServoStep servo_step;
 
-                m_automatic_movement_status = AutomaticMovementStatus::SEND_DONE;
-                m_automatic_execute_shmem_handler->shmemWrite(&m_automatic_movement_status);
+    //         for (int i = 0; i < ui->table_servo_steps->rowCount();)
+    //         {
+    //             while(m_is_automatic_work_paused) {};
+    //             m_scripted_motion_request_status = ScriptedMotionReplyStatus::STARTED;
 
-                while(true)
-                {
-                    m_automatic_execute_shmem_handler->shmemRead(&m_automatic_movement_status);
-                    if (m_automatic_movement_status == AutomaticMovementStatus::RECEIVE_DONE)
-                    {
-                        m_message_retries = 0;
-                        break;
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                    ++m_message_retries;
-                }
+    //             m_scripted_motion_request_shmem_handler->shmemWrite(&m_scripted_motion_request_status);
 
-                if (m_run_in_loop && i == ui->table_servo_steps->rowCount())
-                {
-                    i = 0;
-                    std::cout << "Sending steps finished. Continuing in loop from step 1." << std::endl;
-                }
-            }
+    //             while(true)
+    //             {
+    //                 m_scripted_motion_request_shmem_handler->shmemRead(&m_scripted_motion_request_status);
+    //                 if (m_scripted_motion_request_status == ScriptedMotionReplyStatus::COMPLETED)
+    //                 {
+    //                     break;
+    //                 }
+    //                 else if ( || m_scripted_motion_request_status == ERROR || m_scripted_motion_request_status == DISCONNECTED)
+    //                 {
+    //                     // TODO: add error message
+    //                     break;
+    //                 }
+    //             }
+    //             servo_step.step_num = i;
+    //             servo_step.servo_num = ui->table_servo_steps->item(i, 0)->text().toInt();
+    //             servo_step.position = ui->table_servo_steps->item(i, 1)->text().toInt();
+    //             servo_step.speed = ui->table_servo_steps->item(i, 2)->text().toInt();
+    //             servo_step.delay = ui->table_servo_steps->item(i, 3)->text().toInt();
+    //             m_scripted_motion_shmem_handler->shmemWrite(&servo_step);
 
-            std::cout << "Automatic steps execution completed." << std::endl;
+    //             m_scripted_motion_request_status = ScriptedMotionReplyStatus::STARTED;
+    //             m_scripted_motion_request_shmem_handler->shmemWrite(&m_scripted_motion_request_status);
+    //             ++i;
 
-            m_is_automatic_steps_work = false;
-        }
-        ui->button_execute->setEnabled(true);
-    });
-    t.detach();
+    //             // Wait for message to be send
+    //             while(true)
+    //             {
+    //                 m_scripted_motion_request_shmem_handler->shmemRead(&m_scripted_motion_request_status);
+    //                 if (m_scripted_motion_request_status == ScriptedMotionReplyStatus::COMPLETED)
+    //                 {
+    //                     break;
+    //                 }
+    //                 else if (m_scripted_motion_request_status == INTERRUPTED || m_scripted_motion_request_status == ERROR || m_scripted_motion_request_status == DISCONNECTED)
+    //                 {
+    //                     // TODO: add error message
+    //                     break;
+    //                 }
+    //             }
+
+    //             std::cout << "Sending step finished." << std::endl;
+
+    //             m_scripted_motion_request_status = ScriptedMotionReplyStatus::WAITING;
+    //             m_scripted_motion_request_shmem_handler->shmemWrite(&m_scripted_motion_request_status);
+
+    //             while(true)
+    //             {
+    //                 m_scripted_motion_request_shmem_handler->shmemRead(&m_scripted_motion_request_status);
+    //                 if (m_scripted_motion_request_status == ScriptedMotionReplyStatus::COMPLETED)
+    //                 {
+    //                     m_message_retries = 0;
+    //                     break;
+    //                 }
+    //                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    //                 ++m_message_retries;
+    //             }
+
+    //             if (m_run_in_loop && i == ui->table_servo_steps->rowCount())
+    //             {
+    //                 i = 0;
+    //                 std::cout << "Sending steps finished. Continuing in loop from step 1." << std::endl;
+    //             }
+    //         }
+
+    //         std::cout << "Automatic steps execution completed." << std::endl;
+
+    //         m_is_automatic_steps_work = false;
+    //     }
+    //     ui->button_execute->setEnabled(true);
+    // });
+    // t.detach();
+}
+
+void MainWindow::handleMotionCompleted()
+{
+    std::cout << "MOTION COMPLETED!" << std::endl;
+    *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::NONE);
+    ui->button_execute->setEnabled(true);
 }
 
 void MainWindow::on_button_table_clear_clicked()
@@ -913,5 +997,6 @@ void MainWindow::on_button_table_clear_clicked()
 
 void MainWindow::on_button_stop_clicked()
 {
-    m_is_automatic_work_paused = !m_is_automatic_work_paused;
+    *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::STOP_REQUESTED);
+    emit stopScriptedMotionRequested();
 }

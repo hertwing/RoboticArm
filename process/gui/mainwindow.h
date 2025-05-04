@@ -16,7 +16,9 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include <list>
+#include <vector>
+
+#include "ScriptedMotionWorker.h"
 
 #include "InetCommData.h"
 #include "odin/diagnostic_handler/DataTypes.h"
@@ -68,6 +70,10 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+    static void signalCallbackHandler(int signum);
+
+signals:
+    void stopScriptedMotionRequested();
 
 private slots:
     void on_button_exit_clicked();
@@ -100,6 +106,7 @@ private slots:
     void on_button_execute_clicked();
     void on_button_table_clear_clicked();
     void on_button_stop_clicked();
+    void handleMotionCompleted();
 
 private:
     void draw_menu();
@@ -120,6 +127,10 @@ private:
     void handle_num_buttons(char num);
 
 private:
+    QThread* m_motionThread = nullptr;
+    ScriptedMotionWorker* m_motionWorker = nullptr;
+
+private:
     Ui::MainWindow * ui;
     bool m_joypad_enabled;
     bool m_automatic_enabled;
@@ -133,13 +144,13 @@ private:
     bool m_is_delay_valid;
     bool m_run_in_loop;
     bool m_is_automatic_steps_work;
-    bool m_is_automatic_work_paused;
 
-    automatic_movement_status_t m_automatic_movement_status;
+    std::shared_ptr<scripted_motion_status_t> m_scripted_motion_request_status;
+    std::shared_ptr<scripted_motion_status_t> m_scripted_motion_reply_status;
 
-    std::list<OdinServoStep> m_automatic_steps;
+    std::shared_ptr<std::vector<OdinServoStep>> m_automatic_steps;
 
-    std::filesystem::path m_automatic_file_path;
+    std::filesystem::path m_scripted_motion_files_path;
 
     std::uint64_t m_automatic_steps_count;
 
@@ -150,8 +161,6 @@ private:
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_gui_diagnostic_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_arm_diagnostic_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
-    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<automatic_movement_status_t>> m_automatic_execute_shmem_handler;
-    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinServoStep>> m_automatic_step_shmem_handler;
 
     DiagnosticData m_gui_diagnostic_data;
     DiagnosticData m_rak_diagnostic_data;

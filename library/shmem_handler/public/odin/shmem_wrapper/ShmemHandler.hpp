@@ -414,7 +414,7 @@ bool ShmemHandler<T>::readShmemId()
         m_is_shmem_opened = false;
         m_identifier_num = obtained_pid;
 
-        std::cout << "Reading shmem owner process PID: " << m_identifier_num << std::endl;
+        std::cout << "Shmem owner process PID changed to: " << m_identifier_num << std::endl;
 
         m_writer_sem_name = m_writer_sem_prefix + m_shmem_name + m_identifier_num;
         m_reader_sem_name = m_reader_sem_prefix + m_shmem_name + m_identifier_num;
