@@ -1,0 +1,1 @@
+For development purposes add wlan address to your dev machine 192.168.72.100/24.

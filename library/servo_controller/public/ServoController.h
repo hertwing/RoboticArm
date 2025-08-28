@@ -4,7 +4,7 @@
 #include <cstdint>
 
 static constexpr std::uint16_t PIN_BASE = 300;
-static constexpr std::uint16_t MAX_PWM = 4096;
+static constexpr std::uint16_t MAX_PWM = 4095;
 static constexpr std::uint8_t HERTZ = 50;
 static constexpr std::uint8_t SERVO_NUM = 6;
 static constexpr std::uint16_t MIDDLE_POS_VAL = 1500;
@@ -54,7 +54,9 @@ class ServoController
 {
 public:
     ServoController();
-    ~ServoController() = default;
+    ~ServoController();
+
+    int m_i2c_fd{-1};
 
     void setAbsolutePosition(std::uint16_t position, std::uint8_t servo_num, std::uint8_t step);
     void moveLeft(std::uint8_t servo_num, std::uint8_t value);

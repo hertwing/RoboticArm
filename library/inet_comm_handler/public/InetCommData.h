@@ -5,9 +5,8 @@
 #include <filesystem>
 #include <string>
 
-// TODO: Set fixed IP on RPI boards
-const std::string ROBOTIC_ARM_IP = "192.168.1.37";
-const std::string ROBOTIC_GUI_IP = "192.168.1.41";
+const std::string ROBOTIC_GUI_IP = "192.168.72.101";
+const std::string ROBOTIC_ARM_IP = "192.168.72.102";
 
 static constexpr std::uint16_t DIAGNOSTIC_SOCKET_PORT = 7071;
 static constexpr std::uint16_t CONTROL_SELECTION_PORT = 7072;
@@ -77,6 +76,17 @@ struct ScriptedMotionStepStatus
 {
     std::uint64_t step_num;
     scripted_motion_status_t step_status;
+};
+
+struct ScriptedMotionContext
+{
+    ScriptedMotionStepStatus local_request;
+    ScriptedMotionStepStatus local_reply;
+    ScriptedMotionStepStatus remote_request;
+    ScriptedMotionStepStatus remote_reply;
+    OdinServoStep servo_step_data;
+    std::uint64_t step_monitor = 0;
+    bool is_active = false;
 };
 
 #endif // INETCOMMDATA_H

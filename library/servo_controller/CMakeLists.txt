@@ -5,12 +5,11 @@ if (BUILD_ARM)
 endif (BUILD_ARM)
 
 set(HEADERS
-    public/pca9685.h
+    public/PCA9685.h
     public/ServoController.h
     )
 
 set(SOURCES
-    private/pca9685.c
     private/ServoController.cpp
     )
 
@@ -20,9 +19,6 @@ add_library(${PROJECT_NAME}
     )
 
 target_link_libraries(${PROJECT_NAME}
-    PRIVATE wiringPi
-    PRIVATE rt
-    PRIVATE crypt
     PRIVATE pthread
     )
 
