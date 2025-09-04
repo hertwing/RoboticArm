@@ -81,29 +81,31 @@ void LedHandler::updateLedColors()
     {
         // Check if colors changed
         // std::cout << "Updating Led colors" << std::endl;
+        // for (int i = 0; i < led_handler::LED_COUNT; ++i)
+        // {
+        //     if (m_ledstring.channel[0].leds[i] != m_led_color_status[i])
+        //     {
+        //         m_is_color_changed = true;
+        //     }
+        // }
+        // if (m_is_color_changed)
+        // {
+
+        //     std::cout << "Color changed" << std::endl;
+        // Update every 20 ms
         for (int i = 0; i < led_handler::LED_COUNT; ++i)
         {
-            if (m_ledstring.channel[0].leds[i] != m_led_color_status[i])
-            {
-                m_is_color_changed = true;
-            }
+            m_ledstring.channel[0].leds[i] = m_led_color_status[i];
         }
-        if (m_is_color_changed)
-        {
-
-            std::cout << "Color changed" << std::endl;
-            for (int i = 0; i < led_handler::LED_COUNT; ++i)
-            {
-                m_ledstring.channel[0].leds[i] = m_led_color_status[i];
-            }
-            ws2811_render(&m_ledstring);
-        }
+        ws2811_render(&m_ledstring);
+        // }
         m_is_color_changed = false;
     }
     else
     {
         std::cout << "Couldn't read from shmem." << std::endl;
     }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
 }
 
 void LedHandler::signalCallbackHandler(int signum)

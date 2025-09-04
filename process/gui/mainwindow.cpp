@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
+#include "v4l2capture.h"
 
 #include <chrono>
 #include <filesystem>
@@ -13,12 +14,15 @@
 #include <QTableWidgetItem>
 #include <QTimer>
 #include <QThread>
+#include <QMessageBox>
+#include <QPixmap>
 
 MainWindow::MainWindow(QWidget * parent):
     QMainWindow(parent),
     ui(new Ui::MainWindow),
     m_joypad_enabled(false),
     m_automatic_enabled(false),
+    m_camera_enabled(false),
     m_diagnostic_enabled(false),
     m_diagnostic_board_selected(static_cast<bool>(BoardSelect::GUI)),
     m_chart_swap(0),
@@ -32,6 +36,13 @@ MainWindow::MainWindow(QWidget * parent):
     m_scripted_motion_files_path(std::filesystem::path(odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_FILES_PATH))
 {
     ui->setupUi(this);
+
+    m_cap = new V4L2Capture("/dev/video0", 1280, 720, 30, this);
+
+    connect(m_cap, &V4L2Capture::frameReady, this, &MainWindow::onFrame, Qt::QueuedConnection);
+    connect(m_cap, &V4L2Capture::fatalError, this, &MainWindow::onFatal, Qt::QueuedConnection);
+
+    m_cap->start();
     
     m_scripted_motion_request_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::IDLE));
     m_scripted_motion_reply_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::IDLE));
@@ -84,8 +95,9 @@ MainWindow::MainWindow(QWidget * parent):
 
 MainWindow::~MainWindow()
 {
-    if (m_motionWorker)
-        m_motionWorker->stopMotion();
+    if (m_cap) m_cap->stop();
+    
+    if (m_motionWorker) m_motionWorker->stopMotion();
 
     if (m_motionThread)
     {
@@ -112,6 +124,7 @@ void MainWindow::draw_menu()
     // Buttons
     ui->button_joypad->setStyleSheet(m_disabled_joypad_style_sheet);
     ui->button_automatic->setStyleSheet(m_disabled_automatic_style_sheet);
+    ui->button_camera->setStyleSheet(m_disabled_camera_style_sheet);
     ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
     ui->button_exit->setStyleSheet(m_button_exit_style_sheet);
     ui->button_rpi_switch->setStyleSheet(m_button_rpi_switch_gui_style_sheet);
@@ -125,7 +138,7 @@ void MainWindow::draw_menu()
     ui->widget_ram_usage_chart->setStyleSheet(m_diagnostic_chart_widget_style_sheet);
     ui->widget_latency->setStyleSheet(m_diagnostic_widget_style_sheet);
     ui->widget_latency_chart->setStyleSheet(m_diagnostic_chart_widget_style_sheet);
-    // Lavbels
+    // Labels
     ui->label_cpu_usage->setStyleSheet(m_diagnostic_label_style_sheet);
     ui->label_cpu_temp->setStyleSheet(m_diagnostic_label_style_sheet);
     ui->label_ram_usage->setStyleSheet(m_diagnostic_label_style_sheet);
@@ -142,6 +155,12 @@ void MainWindow::on_button_exit_clicked()
 
 void MainWindow::on_button_joypad_clicked()
 {
+    // Turn off camera
+    if (m_camera_enabled)
+    {
+        m_camera_enabled = false;
+        ui->button_camera->setStyleSheet(m_disabled_camera_style_sheet);
+    }
     // Turn off automatic
     if (m_automatic_enabled)
     {
@@ -170,6 +189,12 @@ void MainWindow::on_button_diagnostic_clicked()
         m_joypad_enabled = false;
         ui->button_joypad->setStyleSheet(m_disabled_joypad_style_sheet);
     }
+    // Turn off camera
+    if (m_camera_enabled)
+    {
+        m_camera_enabled = false;
+        ui->button_camera->setStyleSheet(m_disabled_camera_style_sheet);
+    }
     // Turn off automatic
     if (m_automatic_enabled)
     {
@@ -185,6 +210,12 @@ void MainWindow::on_button_diagnostic_clicked()
 
 void MainWindow::on_button_automatic_clicked()
 {
+    // Turn off camera
+    if (m_camera_enabled)
+    {
+        m_camera_enabled = false;
+        ui->button_camera->setStyleSheet(m_disabled_camera_style_sheet);
+    }
     // Turn off joypad
     if (m_joypad_enabled)
     {
@@ -202,6 +233,34 @@ void MainWindow::on_button_automatic_clicked()
     m_automatic_enabled ? m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::AUTOMATIC) : m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
     m_control_selection_shmem_handler->shmemWrite(&m_control_selection);
     m_automatic_enabled ? show_automatic() : hide_automatic();
+}
+
+
+void MainWindow::on_button_camera_clicked()
+{
+    // Turn off joypad
+    if (m_joypad_enabled)
+    {
+        m_joypad_enabled = false;
+        ui->button_joypad->setStyleSheet(m_disabled_joypad_style_sheet);
+    }
+    // Turn off diagnostic
+    if (m_diagnostic_enabled)
+    {
+        m_diagnostic_enabled = false;
+        ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
+    }
+    // Turn off automatic
+    if (m_automatic_enabled)
+    {
+        m_automatic_enabled = false;
+        ui->button_automatic->setStyleSheet(m_disabled_automatic_style_sheet);
+    }
+
+    m_camera_enabled = !m_camera_enabled;
+    m_camera_enabled ? m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::CAMERA) : m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    m_control_selection_shmem_handler->shmemWrite(&m_control_selection);
+    m_camera_enabled ? show_camera() : hide_camera();
 }
 
 void MainWindow::on_button_rpi_switch_clicked()
@@ -225,6 +284,19 @@ void MainWindow::disable_buttons()
     ui->button_joypad->setStyleSheet(m_disabled_joypad_style_sheet);
     ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
     ui->button_automatic->setStyleSheet(m_disabled_automatic_style_sheet);
+}
+
+void MainWindow::show_camera()
+{
+    ui->stackedWidget->show();
+    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::CAMERA));
+    ui->button_camera->setStyleSheet(m_enabled_camera_style_sheet);
+}
+
+void MainWindow::hide_camera()
+{
+    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
+    ui->button_camera->setStyleSheet(m_disabled_camera_style_sheet);
 }
 
 void MainWindow::show_joypad()
@@ -894,6 +966,21 @@ void MainWindow::on_button_table_clear_clicked()
     ui->table_servo_steps->setRowCount(m_automatic_steps_count);
 }
 
+void MainWindow::onFrame(const QImage& img)
+{
+    if (img.isNull()) return;
+    const QPixmap pm = QPixmap::fromImage(img).scaled(
+        ui->camera_label->size(),
+        Qt::KeepAspectRatio,
+        Qt::SmoothTransformation
+    );
+    ui->camera_label->setPixmap(pm);
+}
+
+void MainWindow::onFatal(const QString& msg)
+{
+    QMessageBox::critical(this, "Camera error", msg);
+}
 
 void MainWindow::on_button_stop_clicked()
 {

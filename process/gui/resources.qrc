@@ -8,5 +8,6 @@
         <file>resources/automatic_icon.png</file>
         <file>resources/genesis_joypad.png</file>
         <file>resources/genesis_joypad_described_alpha.png</file>
+        <file>resources/camera_icon.png</file>
     </qresource>
 </RCC>

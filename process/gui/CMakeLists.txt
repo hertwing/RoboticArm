@@ -24,7 +24,9 @@ set(PROJECT_SOURCES
     mainwindow.h
     mainwindow.ui
     public/ScriptedMotionWorker.h
+    public/v4l2capture.h
     private/ScriptedMotionWorker.cpp
+    private/v4l2capture.cpp
 )
 
 

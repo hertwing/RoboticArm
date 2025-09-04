@@ -43,6 +43,12 @@ private:
     void reconnectToServer();
 
     bool handleConnection();
+
+    int  select_with_deadline(int fd, bool want_read, bool want_write,
+                              int timeout_us) const;
+    bool read_exact(int fd, void* buf, size_t len, int timeout_us);
+    bool write_exact(int fd, const void* buf, size_t len, int timeout_us);
+    void enable_tcp_options(int fd); // keepalive/nodelay
 private:
     std::uint64_t m_buffer_size;
 
@@ -310,46 +316,11 @@ std::int8_t InetCommHandler<T>::serverRead(T * buff)
     {
         return -1;
     }
-    fd_set readSet;
-    struct timeval timeout;
-
-    FD_ZERO(&readSet);
-    FD_SET(m_connfd, &readSet);
-
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 100000;
-
-    int result = select(m_connfd + 1, &readSet, NULL, NULL, &timeout);
-
-    if (result == -1)
-    {
-        std::cout << "Error during select when reading message: " << strerror(errno) << std::endl;
+    if (!read_exact(m_connfd, buff, m_buffer_size, /*100ms*/100000)) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return 0; // timeout
+        std::cerr << "[server] read_exact failed: " << strerror(errno) << std::endl;
         disconnectAndWaitForNewClient();
         return -1;
-    }
-    else if (result == 0)
-    {
-        return 0;
-    }
-
-    size_t total_received = 0;
-    char* data = reinterpret_cast<char*>(buff);
-
-    while (total_received < m_buffer_size)
-    {
-        ssize_t received = recv(m_connfd, data + total_received, m_buffer_size - total_received, 0);
-        if (received == 0) {
-            std::cout << "Client closed connection." << std::endl;
-            disconnectAndWaitForNewClient();
-            return -1;
-        }
-        else if (received < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
-            std::cout << "Error when reading from client: " << strerror(errno) << std::endl;
-            disconnectAndWaitForNewClient();
-            return -1;
-        }
-        total_received += received;
     }
     return 1;
 }
@@ -361,48 +332,11 @@ bool InetCommHandler<T>::serverWrite(const T * buff)
     {
         return false;
     }
-    fd_set writeSet;
-    struct timeval timeout;
-
-    FD_ZERO(&writeSet);
-    FD_SET(m_connfd, &writeSet);
-
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 100000;
-
-    int result = select(m_connfd + 1, NULL, &writeSet, NULL, &timeout);
-    if (result == -1)
-    {
-        std::cout << "Error during select when writing message: " << strerror(errno) << std::endl;
+    if (!write_exact(m_connfd, buff, m_buffer_size, 100000)) {
+        std::cerr << "[server] write_exact failed: " << strerror(errno) << std::endl;
         disconnectAndWaitForNewClient();
         return false;
     }
-    else if (result == 0)
-    {
-        return 0;
-    }
-
-    size_t total_sent = 0;
-    const char* data = reinterpret_cast<const char*>(buff);
-
-    while (total_sent < m_buffer_size)
-    {
-        ssize_t sent = send(m_connfd, data + total_sent, m_buffer_size - total_sent, MSG_NOSIGNAL);
-        if (sent == -1)
-        {
-            std::cout << "Error when writing to client: " << strerror(errno) << std::endl;
-            disconnectAndWaitForNewClient();
-            return false;
-        }
-        if (sent <= 0)
-        {
-            std::cout << "Client closed connection during send." << std::endl;
-            disconnectAndWaitForNewClient();
-            return false;
-        }
-        total_sent += sent;
-    }
-
     return true;
 }
 
@@ -413,49 +347,12 @@ std::int8_t InetCommHandler<T>::clientRead(T * buff)
     {
         return -1;
     }
-    fd_set readSet;
-    struct timeval timeout;
-
-    FD_ZERO(&readSet);
-    FD_SET(m_sockfd, &readSet);
-
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 100000;
-
-    int result = select(m_sockfd + 1, &readSet, NULL, NULL, &timeout);
-    if (result == -1)
-    {
-        std::cout << "Error during select when reading message: " << strerror(errno) << std::endl;
+    if (!read_exact(m_sockfd, buff, m_buffer_size, 100000)) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
+        std::cerr << "[client] read_exact failed: " << strerror(errno) << std::endl;
         reconnectToServer();
         return -1;
     }
-    else if (result == 0)
-    {
-        return 0;
-    }
-
-    size_t total_received = 0;
-    char* data = reinterpret_cast<char*>(buff);
-
-    while (total_received < m_buffer_size)
-    {
-        ssize_t received = recv(m_sockfd, data + total_received, m_buffer_size - total_received, 0);
-        if (received == 0)
-        {
-            std::cout << "Client closed connection." << std::endl;
-            reconnectToServer();
-            return -1;
-        }
-        else if (received < 0)
-        {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
-            std::cout << "Error when reading from client: " << strerror(errno) << std::endl;
-            reconnectToServer();
-            return -1;
-        }
-        total_received += received;
-    }
-
     return 1;
 }
 
@@ -466,40 +363,11 @@ bool InetCommHandler<T>::clientWrite(const T * buff)
     {
         return false;
     }
-    fd_set writeSet;
-    struct timeval timeout;
-
-    FD_ZERO(&writeSet);
-    FD_SET(m_sockfd, &writeSet);
-
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 100000;
-
-    int result = select(m_sockfd + 1, NULL, &writeSet, NULL, &timeout);
-    if (result == -1)
-    {
-        std::cout << "Error during select when writing message: " << strerror(errno) << std::endl;
+    if (!write_exact(m_sockfd, buff, m_buffer_size, 100000)) {
+        std::cerr << "[client] write_exact failed: " << strerror(errno) << std::endl;
         reconnectToServer();
         return false;
     }
-    else if (result == 0)
-    {
-        return false;
-    }
-    size_t total_sent = 0;
-    const char* data = reinterpret_cast<const char*>(buff);
-    while (total_sent < m_buffer_size) 
-    {
-        ssize_t sent = send(m_sockfd, data + total_sent, m_buffer_size - total_sent, MSG_NOSIGNAL);
-        if (sent == -1)
-        {
-            std::cout << "Error when writing to server: " << strerror(errno) << std::endl;
-            reconnectToServer();
-            return false;
-        }
-        total_sent += sent;
-    }
-
     return true;
 }
 
@@ -528,7 +396,7 @@ bool InetCommHandler<T>::handleConnection()
 template <typename T>
 void InetCommHandler<T>::disconnectAndWaitForNewClient()
 {
-    close(m_connfd);
+    if (m_connfd >= 0) { shutdown(m_connfd, SHUT_RDWR); close(m_connfd); }
     m_connfd = -1;
     while (acceptClient() != 0 && m_run_process)
     {
@@ -539,8 +407,8 @@ void InetCommHandler<T>::disconnectAndWaitForNewClient()
 template <typename T>
 void InetCommHandler<T>::reconnectToServer()
 {
-    std::cout << "RECONECTING TO SERVER!" << std::endl;
-    close(m_sockfd);
+    std::cout << "[client] RECONNECTING TO SERVER..." << std::endl;
+    if (m_sockfd >= 0) { shutdown(m_sockfd, SHUT_RDWR); close(m_sockfd); }
     m_sockfd = -1;
     while(createTcpClientSocket() != 0 && m_run_process)
     {
@@ -553,6 +421,95 @@ void InetCommHandler<T>::signalCallbackHandler(int signum)
 {
     std::cout << "InetCommHandler received signal: " << signum << std::endl;
     m_run_process = false;
+}
+
+template <typename T>
+int InetCommHandler<T>::select_with_deadline(int fd, bool want_read, bool want_write, int timeout_us) const
+{
+    using clock = std::chrono::steady_clock;
+    const auto deadline = clock::now() + std::chrono::microseconds(timeout_us);
+
+    for (;;)
+    {
+        fd_set rset, wset;
+        fd_set *r = nullptr, *w = nullptr;
+        if (want_read)  { FD_ZERO(&rset); FD_SET(fd, &rset); r = &rset; }
+        if (want_write) { FD_ZERO(&wset); FD_SET(fd, &wset); w = &wset; }
+
+        auto now = clock::now();
+        if (now >= deadline) return 0; // timeout
+        auto left = std::chrono::duration_cast<std::chrono::microseconds>(deadline - now).count();
+        timeval tv { left / 1000000, static_cast<suseconds_t>(left % 1000000) };
+
+        int rc = select(fd + 1, r, w, nullptr, &tv);
+        if (rc == -1 && errno == EINTR) continue;
+        return rc;
+    }
+}
+
+template <typename T>
+bool InetCommHandler<T>::read_exact(int fd, void* buf, size_t len, int timeout_us)
+{
+    auto* p = static_cast<char*>(buf);
+    size_t got = 0;
+
+    while (got < len)
+    {
+        int rc = select_with_deadline(fd, /*read*/true, /*write*/false, timeout_us);
+        if (rc <= 0) { if (rc == 0) errno = EAGAIN; return false; } // timeout or error
+
+        ssize_t n = recv(fd, p + got, len - got, 0);
+        if (n == 0) { errno = ECONNRESET; return false; }
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
+            return false;
+        }
+        got += size_t(n);
+    }
+    return true;
+}
+
+template <typename T>
+bool InetCommHandler<T>::write_exact(int fd, const void* buf, size_t len, int timeout_us)
+{
+    auto* p = static_cast<const char*>(buf);
+    size_t sent_total = 0;
+
+    while (sent_total < len)
+    {
+        int rc = select_with_deadline(fd, /*read*/false, /*write*/true, timeout_us);
+        if (rc <= 0) { if (rc == 0) errno = EAGAIN; return false; } // timeout or error
+
+        ssize_t n = send(fd, p + sent_total, len - sent_total, MSG_NOSIGNAL);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
+            return false;
+        }
+        sent_total += size_t(n);
+    }
+    return true;
+}
+
+template <typename T>
+void InetCommHandler<T>::enable_tcp_options(int fd)
+{
+    // KEEPALIVE
+    int ka = 1;
+    setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &ka, sizeof(ka));
+#ifdef TCP_KEEPIDLE
+    int idle = 30;  setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE,  &idle, sizeof(idle));
+#endif
+#ifdef TCP_KEEPINTVL
+    int intvl = 10; setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl));
+#endif
+#ifdef TCP_KEEPCNT
+    int cnt = 3;    setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT,   &cnt, sizeof(cnt));
+#endif
+#ifdef TCP_NODELAY
+    int nd = 1; setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nd, sizeof(nd));
+#endif
 }
 
 #endif // INETCOMMHANDLER_H

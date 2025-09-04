@@ -333,6 +333,7 @@ void ServoManager::handleAutomaticData()
                     }
                     else if (req_data.step_status != ScriptedMotionStatus::START_REQUEST)
                     {
+                        updateLedColors(LedOption::AUTOMATIC_READY);
                         stop_requested = true;
                     }
                     break;
@@ -349,6 +350,7 @@ void ServoManager::handleAutomaticData()
                         std::cout << +m_automatic_servo_step.speed << std::endl;
                         std::cout << m_automatic_servo_step.delay << std::endl;
 
+                        updateLedColors(LedOption::AUTOAMTIC_EXECUTE);
                         m_servo_controller.setAbsolutePosition(m_automatic_servo_step.position, m_automatic_servo_step.servo_num-1, m_automatic_servo_step.speed);
                         std::this_thread::sleep_for(std::chrono::milliseconds(m_automatic_servo_step.delay));
 

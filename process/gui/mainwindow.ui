@@ -68,7 +68,7 @@
          <item>
           <widget class="QStackedWidget" name="stackedWidget">
            <property name="currentIndex">
-            <number>3</number>
+            <number>1</number>
            </property>
            <widget class="QWidget" name="main_page">
             <layout class="QGridLayout" name="gridLayout_20">
@@ -88,6 +88,42 @@
               <layout class="QGridLayout" name="gridLayout_19"/>
              </item>
             </layout>
+           </widget>
+           <widget class="QWidget" name="page">
+            <widget class="QWidget" name="gridLayoutWidget">
+             <property name="geometry">
+              <rect>
+               <x>0</x>
+               <y>0</y>
+               <width>731</width>
+               <height>461</height>
+              </rect>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_22">
+              <item row="0" column="0" alignment="Qt::AlignHCenter|Qt::AlignVCenter">
+               <widget class="QLabel" name="camera_label">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>720</width>
+                  <height>450</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Waiting for camera view...</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
            </widget>
            <widget class="QWidget" name="joypad_page">
             <layout class="QGridLayout" name="gridLayout_18">
@@ -1500,6 +1536,12 @@ color: rgb(238, 238, 236)</string>
            </item>
            <item>
             <widget class="QPushButton" name="button_automatic">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
              <property name="minimumSize">
               <size>
                <width>60</width>
@@ -1513,6 +1555,25 @@ color: rgb(238, 238, 236)</string>
            </item>
            <item>
             <widget class="QPushButton" name="button_diagnostic">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>60</width>
+               <height>60</height>
+              </size>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="button_camera">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
                <horstretch>0</horstretch>

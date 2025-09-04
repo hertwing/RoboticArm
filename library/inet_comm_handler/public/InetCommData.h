@@ -21,7 +21,8 @@ enum class ControlSelection
     NONE,
     JOYPAD,
     AUTOMATIC,
-    DIAGNOSTIC
+    DIAGNOSTIC,
+    CAMERA
 };
 
 enum class ScriptedMotionStatus

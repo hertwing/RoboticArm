@@ -27,6 +27,8 @@
 
 using namespace odin::diagnostic_handler;
 
+class V4L2Capture;
+
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -38,6 +40,7 @@ enum class BoardSelect {
 
 enum class WidgetPage {
     MAIN,
+    CAMERA,
     JOYPAD,
     DIAGNOSTIC,
     AUTOMATIC
@@ -107,10 +110,15 @@ private slots:
     void on_button_table_clear_clicked();
     void on_button_stop_clicked();
     void handleMotionCompleted();
+    void on_button_camera_clicked();
+    void onFrame(const QImage& img);
+    void onFatal(const QString& msg);
 
 private:
     void draw_menu();
     void disable_buttons();
+    void show_camera();
+    void hide_camera();
     void show_joypad();
     void hide_joypad();
     void show_diagnostics();
@@ -132,9 +140,11 @@ private:
 
 private:
     Ui::MainWindow * ui;
+    V4L2Capture* m_cap = nullptr;
     bool m_joypad_enabled;
     bool m_automatic_enabled;
     bool m_diagnostic_enabled;
+    bool m_camera_enabled;
     bool m_diagnostic_board_selected;
     bool m_chart_swap;
 
@@ -210,6 +220,14 @@ private:
         "padding: 3; \
         background-color: rgb(204, 0, 0); \
         image: url(:/icons/resources/joypad.png);";
+    const QString m_enabled_camera_style_sheet =
+        "padding: 3; \
+        background-color: rgb(255, 155, 0); \
+        image: url(:/icons/resources/camera_icon.png);";
+    const QString m_disabled_camera_style_sheet =
+        "padding: 3; \
+        background-color: rgb(204, 0, 0); \
+        image: url(:/icons/resources/camera_icon.png);";
     const QString m_enabled_automatic_style_sheet =
         "padding: 3; \
         background-color: rgb(255, 155, 0); \

@@ -63,6 +63,7 @@ void ScriptedMotionWorker::processMotion()
                 std::cout << "Start req" << std::endl;
                 // TODO: Write error handlers
                 m_scripted_motion_reply_shmem_handler->shmemRead(&rep_data);
+                std::cout << rep_data.step_num << " " << static_cast<std::uint64_t>(rep_data.step_status) << std::endl;
                 if (rep_data.step_status == ScriptedMotionStatus::IDLE)
                 {
                     std::cout << "Phase::HandleReq" << std::endl;
