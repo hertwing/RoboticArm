@@ -5,8 +5,8 @@
 #include <filesystem>
 #include <string>
 
-const std::string ROBOTIC_GUI_IP = "192.168.72.101";
-const std::string ROBOTIC_ARM_IP = "192.168.72.102";
+static const std::string ROBOTIC_GUI_IP = "192.168.72.101";
+static const std::string ROBOTIC_ARM_IP = "192.168.72.102";
 
 static constexpr std::uint16_t DIAGNOSTIC_SOCKET_PORT = 7071;
 static constexpr std::uint16_t CONTROL_SELECTION_PORT = 7072;
@@ -24,19 +24,32 @@ enum class ControlSelection
     DIAGNOSTIC
 };
 
+enum class ScriptedMotionStatus
+{
+    IDLE,
+    START_REQUEST,
+    WAITING_DATA,
+    IN_PROGRESS,
+    EXECUTE_ON_ARM,
+    REQUEST_COMPLETED,
+    STOP_REQUESTED,
+    ERROR
+};
+
 enum class ScriptedMotionRequestStatus
 {
-    NONE,
+    IDLE,
     START_REQUEST,
     EXECUTE_ON_ARM,
     REQUEST_COMPLETE,
-    STOP_REQUESTED
+    STOP_REQUESTED,
+    ERROR
 };
 
 enum class ScriptedMotionReplyStatus
 {
-    NONE,
-    WAITING,
+    IDLE,
+    WAITING_DATA,
     IN_PROGRESS,
     COMPLETED,
     ERROR,
@@ -72,21 +85,21 @@ struct OdinServoStep
     std::uint8_t speed;
 };
 
-struct ScriptedMotionStepStatus
+struct ScriptedMotionStepData
 {
     std::uint64_t step_num;
-    scripted_motion_status_t step_status;
+    ScriptedMotionStatus step_status;
 };
 
-struct ScriptedMotionContext
-{
-    ScriptedMotionStepStatus local_request;
-    ScriptedMotionStepStatus local_reply;
-    ScriptedMotionStepStatus remote_request;
-    ScriptedMotionStepStatus remote_reply;
-    OdinServoStep servo_step_data;
-    std::uint64_t step_monitor = 0;
-    bool is_active = false;
-};
+// struct ScriptedMotionContext
+// {
+//     ScriptedMotionStepStatus local_request;
+//     ScriptedMotionStepStatus local_reply;
+//     ScriptedMotionStepStatus remote_request;
+//     ScriptedMotionStepStatus remote_reply;
+//     OdinServoStep servo_step_data;
+//     std::uint64_t step_monitor = 0;
+//     bool is_active = false;
+// };
 
 #endif // INETCOMMDATA_H

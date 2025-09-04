@@ -1,6 +1,7 @@
 #ifndef DIAGNOSTICHANDLER_DATATYPES_H
 #define DIAGNOSTICHANDLER_DATATYPES_H
 
+#include "InetCommData.h"
 #include <cstdint>
 #include <string>
 
@@ -16,8 +17,8 @@ static constexpr const char * CPU_USAGE_CMD = "top -n 1 -b | awk '/^%Cpu/{print 
 static constexpr const char * CPU_TEMP_CMD = "vcgencmd measure_temp | grep -E -o '[0-9]*\\.[0-9]*'";
 static constexpr const char * TOTAL_MEM_CMD = "cat /proc/meminfo | grep MemTotal | awk '{print $2}'";
 static constexpr const char * FREE_MEM_CMD = "cat /proc/meminfo | grep MemFree | awk '{print $2}'";
-static constexpr const char * LATENCY_GUI_CMD = "ping -c 1 OdinArm | grep time= | awk -F'[a-z=&\"]*' '{print $7}'";
-static constexpr const char * LATENCY_ARM_CMD = "ping -c 1 OdinGui | grep time= | awk -F'[a-z=&\"]*' '{print $7}'";
+static const std::string LATENCY_GUI_CMD = "ping -c 1 " + ROBOTIC_ARM_IP + " | grep time= | awk -F'[a-z=&\"]*' '{print $7}'";
+static const std::string LATENCY_ARM_CMD = "ping -c 1 " + ROBOTIC_GUI_IP + " | grep time= | awk -F'[a-z=&\"]*' '{print $7}'";
 
 struct DiagnosticData
 {

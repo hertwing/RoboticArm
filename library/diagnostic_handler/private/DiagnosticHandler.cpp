@@ -86,7 +86,7 @@ void DiagnosticHandler::getLatency(double & data, const std::string & board_name
 {
     try
     {
-        board_name == ARM_BOARD_NAME ? data = std::stod(execCmd(LATENCY_ARM_CMD)) : data = std::stod(execCmd(LATENCY_GUI_CMD));
+        board_name == ARM_BOARD_NAME ? data = std::stod(execCmd(LATENCY_ARM_CMD.c_str())) : data = std::stod(execCmd(LATENCY_GUI_CMD.c_str()));
     }
     catch(const std::exception & error)
     {

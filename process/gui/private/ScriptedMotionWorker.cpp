@@ -11,12 +11,12 @@ ScriptedMotionWorker::ScriptedMotionWorker(QObject* parent)
     : QObject(parent), m_stop_requested(false)
 {
     std::cout << "Creating scripted motion request SHMEM fd." << std::endl;
-    m_scripted_motion_request_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepStatus>>(
-        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REQUEST_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepStatus), true);
+    m_scripted_motion_request_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>>(
+        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REQUEST_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepData), true);
     std::cout << "Scripted motion request SHMEM fd created." << std::endl;
     std::cout << "Creating scripted motion reply SHMEM fd." << std::endl;
-    m_scripted_motion_reply_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepStatus>>(
-        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REPLY_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepStatus), true);
+    m_scripted_motion_reply_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>>(
+        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REPLY_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepData), true);
     std::cout << "Scripted motion reply SHMEM fd created." << std::endl;
     std::cout << "Creating scripted motion servo step info SHMEM fd." << std::endl;
     m_scripted_motion_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
@@ -34,87 +34,91 @@ void ScriptedMotionWorker::setStepsVectorPtr(std::shared_ptr<std::vector<OdinSer
     m_automatic_steps = std::move(stepsVectorPtr);
 }
 
+void ScriptedMotionWorker::setRunInLoop(bool run_in_loop)
+{
+    m_run_in_loop = run_in_loop;
+}
+
 void ScriptedMotionWorker::processMotion()
 {
-    // if (!m_scripted_motion_request_status) return;
-    // if (*m_scripted_motion_request_status == static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::NONE)) return;
-
-    ScriptedMotionContext smc;
-
-    std::uint64_t current_step = 0;
-    ScriptedMotionStepStatus current_step_reply_status;
-    ScriptedMotionStepStatus current_step_request_status;
-    *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::START_REQUEST);
-    current_step_request_status.step_status = *m_scripted_motion_request_status;
-    current_step_request_status.step_num = current_step;
-    if (!m_scripted_motion_request_shmem_handler->shmemWrite(&current_step_request_status))
-    {
-        std::cout << "Error while writing request info to gateway. Stopping request." << std::endl;
-        m_stop_requested = true;
-    }
-
     m_stop_requested = false;
+    enum class Phase { StartReq, HandleReq, WaitStepCompleted, EndReq, StopReq };
+    Phase phase = Phase::StartReq;
+    // Save current step index for GUI table
+    m_current_step_index = 0;
 
-    while (!m_stop_requested && current_step < (*m_automatic_steps).size())
+    auto req_status = ScriptedMotionStatus::IDLE;
+    auto rep_status = ScriptedMotionStatus::IDLE;
+
+    ScriptedMotionStepData req_data{m_current_step_index, req_status};
+    ScriptedMotionStepData rep_data{m_current_step_index, rep_status};
+
+    while (!m_stop_requested)
     {
         QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
-        if(!m_scripted_motion_reply_shmem_handler->shmemRead(&smc.local_reply))
+        switch(phase)
         {
-            std::cout << "Error while reading current step status from gateway. Stopping request." << std::endl;
-            m_stop_requested = true;
-        }
-        if (smc.local_reply.step_num == current_step &&
-            smc.local_reply.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::WAITING) &&
-            *m_scripted_motion_request_status == static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::START_REQUEST))
-        {
-            if (!m_scripted_motion_step_shmem_handler->shmemWrite(&((*m_automatic_steps).at(current_step))))
+            case Phase::StartReq:
             {
-                std::cout << "Error while writing step info to gateway. Stopping request." << std::endl;
-                m_stop_requested = true;
-            }
-            *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::EXECUTE_ON_ARM);
-            current_step_request_status.step_num = current_step;
-            current_step_request_status.step_status = *m_scripted_motion_request_status;
-            if (!m_scripted_motion_request_shmem_handler->shmemWrite(&current_step_request_status))
-            {
-                std::cout << "Error while writing request about step execution on ARM to gateway. Stopping request." << std::endl;
-                m_stop_requested = true;
-            }
-        }
-        if (current_step_reply_status.step_num == current_step &&
-            current_step_reply_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::COMPLETED))
-        {
-            ++current_step;
-            if (current_step < (*m_automatic_steps).size())
-            {
-                *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::START_REQUEST);
-                current_step_request_status.step_num = current_step;
-                current_step_request_status.step_status = *m_scripted_motion_request_status;
-                if (!m_scripted_motion_request_shmem_handler->shmemWrite(&current_step_request_status))
+                std::cout << "Start req" << std::endl;
+                // TODO: Write error handlers
+                m_scripted_motion_reply_shmem_handler->shmemRead(&rep_data);
+                if (rep_data.step_status == ScriptedMotionStatus::IDLE)
                 {
-                    std::cout << "Error while writing request info to gateway. Stopping request." << std::endl;
-                    m_stop_requested = true;
+                    std::cout << "Phase::HandleReq" << std::endl;
+                    phase = Phase::HandleReq;
                 }
+                break;
             }
-            else
+            case Phase::HandleReq:
             {
-                *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::REQUEST_COMPLETE);
-                current_step_request_status.step_status = *m_scripted_motion_request_status;
-                if (!m_scripted_motion_request_shmem_handler->shmemWrite(&current_step_request_status))
+                req_data.step_num = m_current_step_index;
+                req_data.step_status = ScriptedMotionStatus::START_REQUEST;
+                m_scripted_motion_request_shmem_handler->shmemWrite(&req_data);
+                std::cout << "Handling step num: " << m_current_step_index << std::endl;
+                if (m_current_step_index < m_automatic_steps->size())
                 {
-                    std::cout << "Error while writing request complete info to gateway." << std::endl;
-                    m_stop_requested = true;
+                    m_scripted_motion_step_shmem_handler->shmemWrite(&(m_automatic_steps->at(m_current_step_index)));
+                    phase = Phase::WaitStepCompleted;
                 }
+                else
+                {
+                    phase = Phase::EndReq;
+                }
+                break;
             }
+            case Phase::WaitStepCompleted:
+            {
+                m_scripted_motion_reply_shmem_handler->shmemRead(&rep_data);
+                if (rep_data.step_num == m_current_step_index && rep_data.step_status == ScriptedMotionStatus::REQUEST_COMPLETED)
+                {
+                    ++m_current_step_index;
+                    req_data.step_num = m_current_step_index;
+                    phase = Phase::HandleReq;
+                }
+                break;
+            }
+            case Phase::StopReq:
+            {
+                break;
+            }
+            case Phase::EndReq:
+            {
+                m_current_step_index = 0;
+                req_data.step_num = m_current_step_index;
+                req_data.step_status = ScriptedMotionStatus::IDLE;
+                m_scripted_motion_request_shmem_handler->shmemWrite(&req_data);
+                if (!m_run_in_loop)
+                {
+                    m_stop_requested = true;
+                    break;
+                }
+                phase = Phase::StartReq;
+                break;
+            }
+            default:
+                break;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-
-    *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::NONE);
-    current_step_request_status.step_status = *m_scripted_motion_request_status;
-    if (!m_scripted_motion_request_shmem_handler->shmemWrite(&current_step_request_status))
-    {
-        std::cout << "Error while writing request info to gateway after request was done." << std::endl;
     }
 
     emit motionCompleted();
@@ -123,6 +127,8 @@ void ScriptedMotionWorker::processMotion()
 void ScriptedMotionWorker::stopMotion()
 {
     m_stop_requested = true;
+    m_current_step_index = 0;
+    ScriptedMotionStepData req_data{m_current_step_index, ScriptedMotionStatus::IDLE};
+    m_scripted_motion_request_shmem_handler->shmemWrite(&req_data);
     // Write STOP to shmem
-
 }

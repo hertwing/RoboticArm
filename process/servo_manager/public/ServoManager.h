@@ -61,8 +61,9 @@ private:
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<JoypadData>> m_joypad_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<ws2811_led_t>> m_led_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
-    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<scripted_motion_status_t>> m_automatic_execute_shmem_handler;
-    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinServoStep>> m_automatic_step_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>> m_scripted_motion_request_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>> m_scripted_motion_reply_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinServoStep>> m_scripted_motion_step_shmem_handler;
 
     // TODO: move those kind of values to some config file
     static constexpr int JOYPAD_CONTROL_DATA_BINS = 7;

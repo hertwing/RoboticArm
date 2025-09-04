@@ -24,4 +24,5 @@ target_include_directories(library_${PROJECT_NAME}
 
 target_link_libraries(library_${PROJECT_NAME}
     PUBLIC library_shmem_handler
+    PUBLIC library_inet_comm_handler
     )

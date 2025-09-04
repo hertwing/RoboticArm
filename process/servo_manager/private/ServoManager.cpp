@@ -17,12 +17,19 @@ bool ServoManager::m_run_process = true;
 
 ServoManager::ServoManager() :
     m_servo_controller(),
-    m_scripted_motion_status(static_cast<std::uint8_t>(ScriptedMotionRequestStatus::NONE))
+    m_scripted_motion_status(static_cast<std::uint8_t>(ScriptedMotionRequestStatus::IDLE))
 {
-    m_automatic_execute_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<scripted_motion_status_t>>(
-        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REQUEST_STATUS_SHMEM_NAME, sizeof(scripted_motion_status_t), false);
-    m_automatic_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
+    m_scripted_motion_request_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>>(
+        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REQUEST_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepData), false);
+    std::cout << "Scripted motion request SHMEM fd created." << std::endl;
+    std::cout << "Creating scripted motion reply SHMEM fd." << std::endl;
+    m_scripted_motion_reply_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>>(
+        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REPLY_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepData), false);
+    std::cout << "Scripted motion reply SHMEM fd created." << std::endl;
+    std::cout << "Creating scripted motion servo step info SHMEM fd." << std::endl;
+    m_scripted_motion_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
         odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_SERVO_STEP_SHMEM_NAME, sizeof(OdinServoStep), false);
+    std::cout << "Scripted motion servo step SHMEM fd created." << std::endl;
     m_joypad_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<JoypadData>>(
         odin::shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, sizeof(JoypadData), false);
     m_led_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<ws2811_led_t>>(
@@ -298,6 +305,71 @@ void ServoManager::updateLedColors(std::uint8_t led_options)
 
 void ServoManager::handleAutomaticData()
 {
+    bool stop_requested = false;
+    enum class Phase { Idle, StartReq, HandleReq, WaitStepCompleted, EndReq, StopReq };
+    Phase phase = Phase::Idle;
+    // Save current step index for GUI table
+    std::uint64_t current_step_index = 0;
+
+    auto req_status = ScriptedMotionStatus::IDLE;
+    auto rep_status = ScriptedMotionStatus::IDLE;
+
+    ScriptedMotionStepData req_data{current_step_index, req_status};
+    ScriptedMotionStepData rep_data{current_step_index, rep_status};
+
+    while(!stop_requested)
+    {
+        if (m_scripted_motion_request_shmem_handler->openShmem() && m_scripted_motion_reply_shmem_handler->openShmem() && m_scripted_motion_step_shmem_handler->openShmem())
+        {
+            switch(phase)
+            {
+                case Phase::Idle:
+                {
+                    m_scripted_motion_request_shmem_handler->shmemRead(&req_data);
+                    if (req_data.step_num == current_step_index && req_data.step_status == ScriptedMotionStatus::START_REQUEST)
+                    {
+                        std::cout << "Handlig data" << std::endl;
+                        phase = Phase::HandleReq;
+                    }
+                    else if (req_data.step_status != ScriptedMotionStatus::START_REQUEST)
+                    {
+                        stop_requested = true;
+                    }
+                    break;
+                }
+                case Phase::HandleReq:
+                {
+                    m_scripted_motion_step_shmem_handler->shmemRead(&m_automatic_servo_step);
+                    if (current_step_index == m_automatic_servo_step.step_num)
+                    {
+                        std::cout << "Reading step." << std::endl;
+                        std::cout << m_automatic_servo_step.step_num << std::endl;
+                        std::cout << +m_automatic_servo_step.servo_num << std::endl;
+                        std::cout << m_automatic_servo_step.position << std::endl;
+                        std::cout << +m_automatic_servo_step.speed << std::endl;
+                        std::cout << m_automatic_servo_step.delay << std::endl;
+
+                        m_servo_controller.setAbsolutePosition(m_automatic_servo_step.position, m_automatic_servo_step.servo_num-1, m_automatic_servo_step.speed);
+                        std::this_thread::sleep_for(std::chrono::milliseconds(m_automatic_servo_step.delay));
+
+                        rep_data.step_num = current_step_index;
+                        rep_data.step_status = ScriptedMotionStatus::REQUEST_COMPLETED;
+                        m_scripted_motion_reply_shmem_handler->shmemWrite(&rep_data);
+                        ++current_step_index;
+                        phase = Phase::Idle;
+                    }
+                }
+                default:
+                    break;
+            }
+        }
+        else
+        {
+            std::cout << "Cannot open scripted motion SHMEM..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+
     // OdinAutomaticExecuteData automatic_execute_data;
     // if (m_automatic_execute_shmem_handler->openShmem())
     // {

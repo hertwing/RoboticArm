@@ -69,7 +69,16 @@ bool InetCommHandler<T>::m_run_process = true;
 template <typename T>
 InetCommHandler<T>::InetCommHandler(std::uint64_t buffer_size, const std::uint16_t & port) :
     m_buffer_size(buffer_size),
-    m_port(port)
+    m_sockfd(-1),
+    m_connfd(-1),
+    m_port(port),
+    m_server_ip(""),
+    m_len(0),
+    m_servaddr{},
+    m_cli{},
+    m_read_set{},
+    m_server_activity(0),
+    m_read_timeout{0,0}
 {
     while(createTcpServer() != 0 && m_run_process)
     {
@@ -115,7 +124,8 @@ std::int8_t InetCommHandler<T>::createTcpServer()
         std::cout << "Failed to create server socket." << std::endl;
         return -1;
     }
-    
+
+    std::memset(&m_servaddr, 0, sizeof(m_servaddr));
     m_servaddr.sin_family = AF_INET;
     m_servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     m_servaddr.sin_port = htons(m_port);
@@ -310,6 +320,7 @@ std::int8_t InetCommHandler<T>::serverRead(T * buff)
     timeout.tv_usec = 100000;
 
     int result = select(m_connfd + 1, &readSet, NULL, NULL, &timeout);
+
     if (result == -1)
     {
         std::cout << "Error during select when reading message: " << strerror(errno) << std::endl;
@@ -475,10 +486,8 @@ bool InetCommHandler<T>::clientWrite(const T * buff)
     {
         return false;
     }
-
     size_t total_sent = 0;
     const char* data = reinterpret_cast<const char*>(buff);
-
     while (total_sent < m_buffer_size) 
     {
         ssize_t sent = send(m_sockfd, data + total_sent, m_buffer_size - total_sent, MSG_NOSIGNAL);

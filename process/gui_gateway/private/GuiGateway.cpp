@@ -120,187 +120,136 @@ void GuiGateway::handleGuiControlSelection(GuiGateway * gg)
 
 void GuiGateway::handleGuiScriptedMotionRequest(GuiGateway * gg)
 {
-    gg->m_scripted_motion_request_shmem_status = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepStatus>>(
-        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REQUEST_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepStatus), false);
-    gg->m_scripted_motion_reply_shmem_status = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepStatus>>(
-        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REPLY_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepStatus), false);
+    gg->m_scripted_motion_request_shmem_status = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>>(
+        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REQUEST_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepData), false);
+    gg->m_scripted_motion_reply_shmem_status = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>>(
+        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REPLY_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepData), false);
     gg->m_scripted_motion_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
         odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_SERVO_STEP_SHMEM_NAME, sizeof(OdinServoStep), false);
 
-    gg->m_scripted_motion_request_inet_handler = std::make_unique<InetCommHandler<ScriptedMotionStepStatus>>(
-        sizeof(ScriptedMotionStepStatus), SCRIPTED_MOTION_REQUEST_PORT);
+    gg->m_scripted_motion_request_inet_handler = std::make_unique<InetCommHandler<ScriptedMotionStepData>>(
+        sizeof(ScriptedMotionStepData), SCRIPTED_MOTION_REQUEST_PORT);
     gg->m_scripted_motion_step_inet_handler = std::make_unique<InetCommHandler<OdinServoStep>>(
         sizeof(OdinServoStep), SCRIPTED_MOTION_SERVO_DATA_PORT);
 
-    std::uint64_t current_step_monitor = 0;
+    std::uint64_t current_step_index = 0;
     OdinServoStep servo_step;
 
-    ScriptedMotionStepStatus current_step_local_request_status;
-    ScriptedMotionStepStatus current_step_local_reply_status;
-    ScriptedMotionStepStatus current_step_remote_request_status;
-    ScriptedMotionStepStatus current_step_remote_reply_status;
+    auto req_status = ScriptedMotionStatus::IDLE;
+    auto rep_status = ScriptedMotionStatus::IDLE;
 
-    bool handle_motion_request = false;
+    auto gg_req_status = ScriptedMotionStatus::IDLE;
+    auto gg_rep_status = ScriptedMotionStatus::IDLE;
+
+    ScriptedMotionStepData req_data{current_step_index, req_status};
+    ScriptedMotionStepData rep_data{current_step_index, rep_status};
+
+    ScriptedMotionStepData gg_req_data{current_step_index, gg_req_status};
+    ScriptedMotionStepData gg_rep_data{current_step_index, gg_rep_status};
+
     std::uint8_t connection_retries = 0;
-    
+
+    enum class Phase { Idle, StartReq, HandleRequest, WaitArmComplete, StopReq, EndReq };
+    Phase phase = Phase::Idle;
+
     while (gg->m_run_process)
     {
-        // Check client connection
-        if (!gg->m_scripted_motion_request_inet_handler->serverWrite(&current_step_remote_request_status))
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            ++connection_retries;
-            if (connection_retries == 10)
-            {
-                std::cout << "Error while checking client connection. Waiting 10 seconds before retry." << std::endl;
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-                connection_retries = 0;
-            }
-        }
-        current_step_monitor = 0;
         if (gg->m_scripted_motion_request_shmem_status->openShmem() && gg->m_scripted_motion_reply_shmem_status->openShmem() && gg->m_scripted_motion_step_shmem_handler->openShmem())
         {
-            if (gg->m_scripted_motion_request_shmem_status->shmemRead(&current_step_local_request_status))
+            switch (phase)
             {
-                if (current_step_local_request_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::START_REQUEST))
+                case Phase::Idle:
                 {
-                    current_step_remote_request_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::START_REQUEST);
-                    current_step_remote_reply_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::WAITING);
-
-                    current_step_monitor = current_step_local_request_status.step_num;
-                    handle_motion_request = true;
-
-                    if (!gg->m_scripted_motion_request_inet_handler->serverWrite(&current_step_remote_request_status))
+                    if (!gg->m_scripted_motion_request_shmem_status->shmemRead(&req_data))
                     {
-                        std::cout << "Error while writing request status to client. Stopping the request." << std::endl;
-                        handle_motion_request = false;
-                        current_step_local_reply_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::DISCONNECTED);
-                        if (!gg->m_scripted_motion_reply_shmem_status->shmemWrite(&current_step_local_reply_status))
-                        {
-                            std::cout << "Error while writing scripted motion step status to GUI." << std::endl;
-                        }
-                    }
-                    std::cout << "Wrote to clinet about request." << std::endl;
-                }
-            }
-            else
-            {
-                std::cout << "Error while reading scripted motion request status SHMEM" << std::endl;
-                handle_motion_request = false;
-            }
-            while (handle_motion_request && gg->m_run_process)
-            {
-                if (!gg->m_scripted_motion_request_shmem_status->shmemRead(&current_step_local_request_status))
-                {
-                    std::cout << "Error while reading scripted motion step request status from GUI." << std::endl;
-                    handle_motion_request = false;
-                    break;
-                }
-                if ((current_step_local_request_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::STOP_REQUESTED) ||
-                    current_step_local_request_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::REQUEST_COMPLETE)) &&
-                    handle_motion_request)
-                {
-                    current_step_remote_request_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::REQUEST_COMPLETE);
-                    if (!gg->m_scripted_motion_request_inet_handler->serverWrite(&current_step_remote_request_status))
-                    {
-                        std::cout << "Error while writing request status to client. Stopping the request." << std::endl;
-                        handle_motion_request = false;
-                        current_step_local_reply_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::DISCONNECTED);
-                        if (!gg->m_scripted_motion_reply_shmem_status->shmemWrite(&current_step_local_reply_status))
-                        {
-                            std::cout << "Error while writing scripted motion step status to GUI." << std::endl;
-                        }
-                    }
-                    current_step_remote_request_status.step_num = 0;
-                    current_step_remote_request_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::NONE);
-
-                    std::cout << "Scripted motion request done." << std::endl;
-                    handle_motion_request = false;
-                    break;
-                }
-                if (current_step_local_request_status.step_status != static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::STOP_REQUESTED) &&
-                    current_step_local_request_status.step_status != static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::REQUEST_COMPLETE) &&
-                    current_step_local_reply_status.step_status != static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::WAITING) &&
-                    handle_motion_request)
-                {
-                    current_step_local_reply_status.step_num = current_step_local_request_status.step_num;
-                    current_step_local_reply_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::WAITING);
-                    if (!gg->m_scripted_motion_reply_shmem_status->shmemWrite(&current_step_local_reply_status))
-                    {
-                        std::cout << "Error while writing scripted motion step status to GUI." << std::endl;
-                        handle_motion_request = false;
+                        std::cout << "[GUI GATEWAY] Error: Couldn't read automated motion request SHMEM." << std::endl;
                         break;
                     }
+                    if (req_data.step_num == current_step_index && req_data.step_status == ScriptedMotionStatus::START_REQUEST)
+                    {
+                        std::cout << "Start request" << std::endl;
+                        gg_req_data.step_num = current_step_index;
+                        gg_req_data.step_status = ScriptedMotionStatus::START_REQUEST;
+                        gg->m_scripted_motion_request_inet_handler->serverWrite(&gg_req_data);
+                        phase = Phase::HandleRequest;
+                    }
+                    else if (req_data.step_status != ScriptedMotionStatus::START_REQUEST)
+                    {
+                        current_step_index = 0;
+                        rep_data.step_num = current_step_index;
+                        rep_data.step_status = ScriptedMotionStatus::IDLE;
+                        // Check client connection while in IDLE
+                        if (!gg->m_scripted_motion_request_inet_handler->serverWrite(&rep_data))
+                        {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                            ++connection_retries;
+                            if (connection_retries == 10)
+                            {
+                                std::cout << "Error while checking client connection. Waiting 10 seconds before retry." << std::endl;
+                                std::this_thread::sleep_for(std::chrono::seconds(1));
+                                connection_retries = 0;
+                            }
+                        }
+                        if (!gg->m_scripted_motion_reply_shmem_status->shmemWrite(&rep_data))
+                        {
+                            std::cout << "[GUI GATEWAY] Error: Couldn't write automated motion reply SHMEM." << std::endl;
+                            break;
+                        }
+                    }
+                    break;
                 }
-                if (current_step_local_request_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::EXECUTE_ON_ARM) &&
-                    current_step_local_reply_status.step_status != static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::IN_PROGRESS) &&
-                    current_step_monitor == current_step_local_request_status.step_num &&
-                    handle_motion_request) 
+                case Phase::HandleRequest:
                 {
+                    std::cout << "Handling request data" << std::endl;
                     if (!gg->m_scripted_motion_step_shmem_handler->shmemRead(&servo_step))
                     {
-                        std::cout << "Error while reading scripted motion servo step data." << std::endl;
-                        handle_motion_request = false;
+                        std::cout << "[GUI GATEWAY] Error: Couldn't read automated motion request SHMEM." << std::endl;
+                        phase = Phase::Idle;
                         break;
                     }
-                    current_step_local_reply_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::IN_PROGRESS);
-                    std::cout << "Writing servo data to ARM:" << std::endl
-                            << +servo_step.step_num << std::endl
-                            << +servo_step.servo_num << std::endl
-                            << +servo_step.position << std::endl
-                            << +servo_step.speed << std::endl
-                            << +servo_step.delay << std::endl
-                            << "---" << std::endl;
-                    if (!gg->m_scripted_motion_step_inet_handler->serverWrite(&servo_step))
+                    std::cout << +servo_step.step_num << std::endl;
+                    if (servo_step.step_num == current_step_index)
                     {
-                        std::cout << "Couldn't write servo step to client. Stopping the request." << std::endl;
-                        handle_motion_request = false;
-                        break;
+                        gg->m_scripted_motion_step_inet_handler->serverWrite(&servo_step);
+                        phase = Phase::WaitArmComplete;
                     }
-                    ++current_step_monitor;
-                }
-                while (current_step_local_request_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::EXECUTE_ON_ARM) &&
-                       current_step_remote_reply_status.step_status != static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::COMPLETED) &&
-                       handle_motion_request &&
-                       gg->m_run_process)
-                {
-                    if (gg->m_scripted_motion_request_inet_handler->serverRead(&current_step_remote_reply_status) < 0)
+                    else
                     {
-                        std::cout << "Error while reading motion request status from remote. Stopping the request," << std::endl;
-                        current_step_remote_reply_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::DISCONNECTED);
-                        handle_motion_request = false;
-                        break;
+                        // TODO
+                        std::cout << "SERVO STEP MISMATCH!" << std::endl;
+                        phase = Phase::Idle;
                     }
-                }
-                if (current_step_local_request_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::EXECUTE_ON_ARM) &&
-                    current_step_local_reply_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::IN_PROGRESS) &&
-                    current_step_remote_reply_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::COMPLETED) &&
-                    handle_motion_request)
-                {
-                    if (current_step_remote_reply_status.step_num != current_step_local_reply_status.step_num)
-                    {
-                        std::cout << "Wrong step status received from ARM. Stopping request." << std::endl;
-                        std::cout << +current_step_remote_reply_status.step_num << " " << +current_step_local_reply_status.step_num << std::endl;
-                        handle_motion_request = false;
-                        break;
-                    }
-                    current_step_local_reply_status.step_num = current_step_local_request_status.step_num;
-                    current_step_local_reply_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::COMPLETED);
-                    if (!gg->m_scripted_motion_reply_shmem_status->shmemWrite(&current_step_local_reply_status))
-                    {
-                        std::cout << "Error while writing scripted motion step completed status to GUI." << std::endl;
-                        handle_motion_request = false;
-                        break;
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                }
-                if (current_step_remote_reply_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::ERROR))
-                {
-                    std::cout << "Error status received from client. Stopping request." << std::endl;
-                    handle_motion_request = false;
                     break;
                 }
-                current_step_remote_reply_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::WAITING);
+                case Phase::WaitArmComplete:
+                {
+                    if (gg->m_scripted_motion_request_inet_handler->serverRead(&gg_rep_data) < 0)
+                    {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    }
+                    std::cout << "WaitArmComplete " << +gg_rep_data.step_num << " " << static_cast<std::uint64_t>(gg_rep_data.step_status) << std::endl;
+                    if (gg_rep_data.step_num == current_step_index && gg_rep_data.step_status == ScriptedMotionStatus::REQUEST_COMPLETED)
+                    {
+                        rep_data.step_num = current_step_index;
+                        rep_data.step_status = ScriptedMotionStatus::REQUEST_COMPLETED;
+                        if (!gg->m_scripted_motion_reply_shmem_status->shmemWrite(&rep_data))
+                        {
+                            std::cout << "[GUI GATEWAY] Error: Couldn't write automated motion reply SHMEM." << std::endl;
+                            phase = Phase::Idle;
+                            break;
+                        }
+                        ++current_step_index;
+                        std::cout << "SI " << current_step_index << std::endl;
+                        phase = Phase::Idle;
+                    }
+                    break;
+                }
+                case Phase::StopReq:
+                {
+                    break;
+                }
+                default:
+                    break;
             }
         }
         else
@@ -308,7 +257,7 @@ void GuiGateway::handleGuiScriptedMotionRequest(GuiGateway * gg)
             std::cout << "Cannot open scripted motion SHMEM..." << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
 }
 
@@ -398,191 +347,121 @@ void GuiGateway::handleArmControlSelection(GuiGateway * gg)
 
 void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
 {
-    gg->m_scripted_motion_request_shmem_status = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepStatus>>(
-        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REQUEST_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepStatus), true);
+    gg->m_scripted_motion_request_shmem_status = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>>(
+        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REQUEST_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepData), true);
+    gg->m_scripted_motion_reply_shmem_status = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>>(
+        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REPLY_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepData), true);
     gg->m_scripted_motion_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
         odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_SERVO_STEP_SHMEM_NAME, sizeof(OdinServoStep), true);
-    gg->m_scripted_motion_reply_shmem_status = std::make_unique<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepStatus>>(
-        odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_REPLY_STATUS_SHMEM_NAME, sizeof(ScriptedMotionStepStatus), true);
 
-    gg->m_scripted_motion_request_inet_handler = std::make_unique<InetCommHandler<ScriptedMotionStepStatus>>(
-        sizeof(ScriptedMotionStepStatus), SCRIPTED_MOTION_REQUEST_PORT, ROBOTIC_GUI_IP);
+    gg->m_scripted_motion_request_inet_handler = std::make_unique<InetCommHandler<ScriptedMotionStepData>>(
+        sizeof(ScriptedMotionStepData), SCRIPTED_MOTION_REQUEST_PORT, ROBOTIC_GUI_IP);
     gg->m_scripted_motion_step_inet_handler = std::make_unique<InetCommHandler<OdinServoStep>>(
         sizeof(OdinServoStep), SCRIPTED_MOTION_SERVO_DATA_PORT, ROBOTIC_GUI_IP);
 
-    bool handle_motion_request = false;
-    std::uint8_t connection_retries = 0;
-
-    std::uint64_t current_step_monitor = 0;
+    std::uint64_t current_step_index = 0;
     OdinServoStep servo_step;
 
-    ScriptedMotionStepStatus current_step_local_request_status;
-    ScriptedMotionStepStatus current_step_local_reply_status;
-    ScriptedMotionStepStatus current_step_remote_request_status;
-    ScriptedMotionStepStatus current_step_remote_reply_status;
+    auto req_status = ScriptedMotionStatus::IDLE;
+    auto rep_status = ScriptedMotionStatus::IDLE;
+
+    auto gg_req_status = ScriptedMotionStatus::IDLE;
+    auto gg_rep_status = ScriptedMotionStatus::IDLE;
+
+    ScriptedMotionStepData req_data{current_step_index, req_status};
+    ScriptedMotionStepData rep_data{current_step_index, rep_status};
+
+    ScriptedMotionStepData gg_req_data{current_step_index, gg_req_status};
+    ScriptedMotionStepData gg_rep_data{current_step_index, gg_rep_status};
+
+    std::uint8_t connection_retries = 0;
+
+    enum class Phase { Idle, StartReq, HandleRequest, WaitArmComplete, StopReq, EndReq };
+    Phase phase = Phase::Idle;
 
     while (gg->m_run_process)
-    {       
-        // Check client connection and read request status
-        if (gg->m_scripted_motion_request_inet_handler->clientRead(&current_step_remote_request_status) < 0)
+    {
+        switch (phase)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            ++connection_retries;
-            if (connection_retries == 10)
+            case Phase::Idle:
             {
-                std::cout << "Error while checking server connection. Waiting 10 seconds before retry." << std::endl;
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-                connection_retries = 0;
-            }
-        }
-        current_step_monitor = 0;
-        current_step_remote_reply_status.step_num = 0;
-        if (current_step_remote_request_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::START_REQUEST))
-        {
-            std::cout << "START REQUEST" << std::endl;
-            handle_motion_request = true;
-            if (gg->m_scripted_motion_request_shmem_status->openShmem() && gg->m_scripted_motion_reply_shmem_status->openShmem() && gg->m_scripted_motion_step_shmem_handler->openShmem())
-            {
-                while (handle_motion_request && gg->m_run_process)
+                // Wait for server data 
+                if (gg->m_scripted_motion_request_inet_handler->clientRead(&gg_req_data) < 0)
                 {
-                    if (gg->m_scripted_motion_step_inet_handler->clientRead(&servo_step))
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    ++connection_retries;
+                    if (connection_retries == 10)
                     {
-                        std::cout << "START REQUEST 1" << std::endl;
-                        if (current_step_remote_reply_status.step_num != current_step_monitor)
-                        {
-                            std::cout << "Error while processing remote motion request: step number mismatch. Stopping the request;" << std::endl;
-                            std::cout << +current_step_monitor << " " << +current_step_remote_reply_status.step_num << std::endl;
-                            current_step_remote_reply_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::ERROR);
-                            gg->m_scripted_motion_request_inet_handler->clientWrite(&current_step_remote_reply_status);
-                        }
-                        // TODO: write logic to send data to arm controller
-                        std::cout << "Writing servo data to ARM:" << std::endl
-                            << +servo_step.step_num << std::endl
-                            << +servo_step.servo_num << std::endl
-                            << +servo_step.position << std::endl
-                            << +servo_step.speed << std::endl
-                            << +servo_step.delay << std::endl
-                            << "---" << std::endl;
-                        //
-                        current_step_remote_reply_status.step_status = static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::COMPLETED);
-                        std::cout << +current_step_monitor << " " << +current_step_remote_reply_status.step_num << std::endl;
-                        gg->m_scripted_motion_request_inet_handler->clientWrite(&current_step_remote_reply_status);
-                        ++current_step_monitor;
-                        current_step_remote_reply_status.step_num = current_step_monitor;
-                    }
-                    if (gg->m_scripted_motion_request_inet_handler->clientRead(&current_step_remote_request_status) < 0)
-                    {
-                        std::cout << "START REQUEST 2" << std::endl;
-                        //HANDLE CONNECTION ERROR
-                    }
-                    if (current_step_remote_request_status.step_status == static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::REQUEST_COMPLETE))
-                    {
-                        std::cout << "START REQUEST 3" << std::endl;
-                        handle_motion_request = false;
+                        std::cout << "Error while checking server connection. Waiting 10 seconds before retry." << std::endl;
+                        std::this_thread::sleep_for(std::chrono::seconds(1));
+                        connection_retries = 0;
                     }
                 }
+                if (gg_req_data.step_num == current_step_index && gg_req_data.step_status == ScriptedMotionStatus::START_REQUEST)
+                {
+                    std::cout << "Handling req" << std::endl;
+                    req_data.step_num = current_step_index;
+                    req_data.step_status = ScriptedMotionStatus::START_REQUEST;
+                    gg->m_scripted_motion_request_shmem_status->shmemWrite(&req_data);
+                    phase = Phase::HandleRequest;
+                }
+                else if (gg_req_data.step_status != ScriptedMotionStatus::START_REQUEST)
+                {
+                    current_step_index = 0;
+                    req_data.step_num = current_step_index;
+                    req_data.step_status = ScriptedMotionStatus::IDLE;
+                    gg->m_scripted_motion_request_shmem_status->shmemWrite(&req_data);
+                }
+                break;
             }
-            else
+            case Phase::HandleRequest:
             {
-                std::cout << "Cannot open scripted motion SHMEM..." << std::endl;
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::cout << "Handling request data" << std::endl;
+                if (gg->m_scripted_motion_step_inet_handler->clientRead(&servo_step) < 0)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                if (servo_step.step_num == current_step_index)
+                {
+                    std::cout << "---" << std::endl;
+                    std::cout << +servo_step.step_num << std::endl;
+                    std::cout << +servo_step.servo_num << std::endl;
+                    std::cout << +servo_step.position << std::endl;
+                    std::cout << +servo_step.speed << std::endl;
+                    std::cout << +servo_step.delay << std::endl;
+                    gg->m_scripted_motion_step_shmem_handler->shmemWrite(&servo_step);
+                    phase = Phase::WaitArmComplete;
+                }
+                else
+                {
+                    // TODO
+                    std::cout << "SERVO STEP MISMATCH!" << std::endl;
+                    phase = Phase::Idle;
+                }
+                break;
             }
+            case Phase::WaitArmComplete:
+            {
+                gg->m_scripted_motion_reply_shmem_status->shmemRead(&rep_data);
+                if (rep_data.step_num == current_step_index && rep_data.step_status == ScriptedMotionStatus::REQUEST_COMPLETED)
+                {
+                    gg_rep_data.step_num = current_step_index;
+                    gg_rep_data.step_status = ScriptedMotionStatus::REQUEST_COMPLETED;
+                    if (gg->m_scripted_motion_request_inet_handler->clientWrite(&gg_rep_data) < 0)
+                    {
+                        std::cout << "[GUI GATEWAY] Error: Couldn't write automated motion reply to server." << std::endl;
+                        break;
+                    }
+                    ++current_step_index;
+                    std::cout << "SI " << current_step_index << std::endl;
+                    phase = Phase::Idle;
+                    break;
+                }
+            }
+            default:
+                break;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    //     bool data_start = false;
-
-    //     while (!data_start && gg->m_run_process)
-    //     {
-    //         if (gg->m_scripted_motion_request_inet_handler->clientRead(&gg->m_scripted_motion_request_status))
-    //         {
-    //             if (gg->m_scripted_motion_request_status == ScriptedMotionReplyStatus::START_SENDING)
-    //             {
-    //                 std::cout << "Automatic Movement process started." << std::endl;
-    //                 data_start = true;
-
-    //                 while (data_start && gg->m_run_process)
-    //                 {
-    //                     if (gg->m_scripted_motion_step_inet_handler->clientRead(&servo_step))
-    //                     {
-    //                         // Write servo instruction taken from server
-    //                         if (!gg->m_scripted_motion_step_shmem_handler->shmemWrite(&servo_step))
-    //                         {
-    //                             std::cout << "Failed to write servo step to SHMEM." << std::endl;
-    //                             continue;
-    //                         }
-                            
-    //                         if (!gg->m_scripted_motion_request_shmem_status->shmemWrite(&gg->m_scripted_motion_request_status))
-    //                         {
-    //                             std::cout << "Failed to write Automatic Movement Status to SHMEM." << std::endl;
-    //                             continue;
-    //                         }
-                            
-    //                         std::uint16_t wait_timeout = 0;
-    //                         while (wait_timeout < 5000 && gg->m_run_process)
-    //                         {
-    //                             if (!gg->m_scripted_motion_request_shmem_status->shmemRead(&gg->m_scripted_motion_request_status))
-    //                             {
-    //                                 std::cout << "Failed to read Automatic Movement Status from SHMEM." << std::endl;
-    //                                 break;
-    //                             }
-    //                             if (gg->m_scripted_motion_request_status == ScriptedMotionReplyStatus::RECEIVE_SUCCESS)
-    //                             {
-    //                                 data_start = false;
-    //                                 break;
-    //                             }
-    //                             std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    //                             wait_timeout += 10;
-    //                         }
-    //                         if (wait_timeout >= 5000)
-    //                         {
-    //                             std::cout << "[TIMEOUT] Waiting for RECEIVE_SUCCESS failed." << std::endl;
-    //                             break;
-    //                         }
-    //                     }
-    //                     else
-    //                     {
-    //                         std::cout << "Failed to read servo step from TCP." << std::endl;
-    //                         break;
-    //                     }
-    //                 }
-    //             }
-    //             else if (gg->m_scripted_motion_request_status == ScriptedMotionReplyStatus::SEND_DONE)
-    //             {
-    //                 if (!gg->m_scripted_motion_request_shmem_status->shmemWrite(&gg->m_scripted_motion_request_status))
-    //                 {
-    //                     std::cout << "Failed to write SEND_DONE to SHMEM." << std::endl;
-    //                     continue;
-    //                 }
-    //                 std::uint16_t wait_timeout = 0;
-    //                 while(wait_timeout < 5000 && gg->m_run_process)
-    //                 {
-    //                     if (!gg->m_scripted_motion_request_shmem_status->shmemRead(&gg->m_scripted_motion_request_status))
-    //                     {
-    //                         std::cout << "Failed to read from SHMEM waiting for RECEIVE_DONE." << std::endl;
-    //                         break;
-    //                     }
-    //                     if (gg->m_scripted_motion_request_status == ScriptedMotionReplyStatus::RECEIVE_DONE)
-    //                     {
-    //                         if (!gg->m_scripted_motion_request_inet_handler->clientWrite(&gg->m_scripted_motion_request_status))
-    //                         {
-    //                             std::cout << "Failed to send RECEIVE_DONE to GUI." << std::endl;
-    //                         }
-    //                         break;
-    //                     }
-    //                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    //                     wait_timeout += 10;
-    //                 }
-    //                 if (wait_timeout >= 5000)
-    //                 {
-    //                     std::cout << "[TIMEOUT] Waiting for RECEIVE_DONE failed." << std::endl;
-    //                 }
-    //             }
-    //         }
-    //         else
-    //         {
-    //             std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    //         }
-    //     }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
 }
 

@@ -73,28 +73,3 @@ cd ..
 # sudo apt-get install libpthread-stubs0-dev
 # sudi apt-get install libboost-all-dev
 
-# WiringPi
-if [ ! -d "./WiringPi" ]
-then
-    git clone https://github.com/WiringPi/WiringPi.git
-fi
-
-cd ./WiringPi
-git pull origin
-
-export CC=/opt/cross-pi-gcc-10.2.0-64/bin/aarch64-linux-gnu-gcc
-export CXX=/opt/cross-pi-gcc-10.2.0-64/bin/aarch64-linux-gnu-g++
-
-cd wiringPi; make -j4; cd ..;
-cp ./wiringPi/libwiringPi.so.2.70 /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/
-ln -s /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/libwiringPi.so.2.70 /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/libwiringPi.so
-
-#TODO: copy to RPi
-
-cp ./wiringPi/*.h /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/include/
-
-cd devLib; make -j4; cd ..;
-cp ./devLib/libwiringPiDev.so.2.70 /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/
-ln -s /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/libwiringPiDev.so.2.70 /opt/cross-pi-gcc-10.2.0-64/aarch64-linux-gnu/libc/usr/lib/libwiringPiDev.so
-cd ..
-

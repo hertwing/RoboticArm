@@ -33,8 +33,8 @@ MainWindow::MainWindow(QWidget * parent):
 {
     ui->setupUi(this);
     
-    m_scripted_motion_request_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::NONE));
-    m_scripted_motion_reply_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::NONE));
+    m_scripted_motion_request_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::IDLE));
+    m_scripted_motion_reply_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::IDLE));
     m_automatic_steps = std::make_shared<std::vector<OdinServoStep>>();
     
     scan_automatic_files();
@@ -867,6 +867,8 @@ void MainWindow::on_radioButton_loop_toggled(bool checked)
 {
     checked ? m_run_in_loop = true : m_run_in_loop = false;
 
+    m_motionWorker->setRunInLoop(m_run_in_loop);
+
     std::cout << "run in loop: " << m_run_in_loop << std::endl;
 }
 
@@ -877,114 +879,12 @@ void MainWindow::on_button_execute_clicked()
     *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::START_REQUEST);
 
     QMetaObject::invokeMethod(m_motionWorker, "processMotion", Qt::QueuedConnection);
-
-
-    // bool start_movement_request = true;
-    // while(!m_scripted_motion_reply_status == static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::COMPLETED) &&
-    //       !m_scripted_motion_reply_status == static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::ERROR) &&
-    //       !m_scripted_motion_reply_status == static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::DISCONNECTED))
-    // {
-    //     if (start_movement_request)
-    //     {
-    //         ui->button_execute->setEnabled(false);
-    //         start_movement_request = false;
-    //     }
-    // }
-    // ui->button_execute->setEnabled(true);
-
-
-    // std::thread t([this](){
-    //     m_message_retries = 0;
-    //     ui->button_execute->setEnabled(false);
-
-    //     if (!m_is_automatic_steps_work && ui->table_servo_steps->rowCount() > 0)
-    //     {
-    //         m_is_automatic_steps_work = true;
-    //         OdinServoStep servo_step;
-
-    //         for (int i = 0; i < ui->table_servo_steps->rowCount();)
-    //         {
-    //             while(m_is_automatic_work_paused) {};
-    //             m_scripted_motion_request_status = ScriptedMotionReplyStatus::STARTED;
-
-    //             m_scripted_motion_request_shmem_handler->shmemWrite(&m_scripted_motion_request_status);
-
-    //             while(true)
-    //             {
-    //                 m_scripted_motion_request_shmem_handler->shmemRead(&m_scripted_motion_request_status);
-    //                 if (m_scripted_motion_request_status == ScriptedMotionReplyStatus::COMPLETED)
-    //                 {
-    //                     break;
-    //                 }
-    //                 else if ( || m_scripted_motion_request_status == ERROR || m_scripted_motion_request_status == DISCONNECTED)
-    //                 {
-    //                     // TODO: add error message
-    //                     break;
-    //                 }
-    //             }
-    //             servo_step.step_num = i;
-    //             servo_step.servo_num = ui->table_servo_steps->item(i, 0)->text().toInt();
-    //             servo_step.position = ui->table_servo_steps->item(i, 1)->text().toInt();
-    //             servo_step.speed = ui->table_servo_steps->item(i, 2)->text().toInt();
-    //             servo_step.delay = ui->table_servo_steps->item(i, 3)->text().toInt();
-    //             m_scripted_motion_shmem_handler->shmemWrite(&servo_step);
-
-    //             m_scripted_motion_request_status = ScriptedMotionReplyStatus::STARTED;
-    //             m_scripted_motion_request_shmem_handler->shmemWrite(&m_scripted_motion_request_status);
-    //             ++i;
-
-    //             // Wait for message to be send
-    //             while(true)
-    //             {
-    //                 m_scripted_motion_request_shmem_handler->shmemRead(&m_scripted_motion_request_status);
-    //                 if (m_scripted_motion_request_status == ScriptedMotionReplyStatus::COMPLETED)
-    //                 {
-    //                     break;
-    //                 }
-    //                 else if (m_scripted_motion_request_status == INTERRUPTED || m_scripted_motion_request_status == ERROR || m_scripted_motion_request_status == DISCONNECTED)
-    //                 {
-    //                     // TODO: add error message
-    //                     break;
-    //                 }
-    //             }
-
-    //             std::cout << "Sending step finished." << std::endl;
-
-    //             m_scripted_motion_request_status = ScriptedMotionReplyStatus::WAITING;
-    //             m_scripted_motion_request_shmem_handler->shmemWrite(&m_scripted_motion_request_status);
-
-    //             while(true)
-    //             {
-    //                 m_scripted_motion_request_shmem_handler->shmemRead(&m_scripted_motion_request_status);
-    //                 if (m_scripted_motion_request_status == ScriptedMotionReplyStatus::COMPLETED)
-    //                 {
-    //                     m_message_retries = 0;
-    //                     break;
-    //                 }
-    //                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    //                 ++m_message_retries;
-    //             }
-
-    //             if (m_run_in_loop && i == ui->table_servo_steps->rowCount())
-    //             {
-    //                 i = 0;
-    //                 std::cout << "Sending steps finished. Continuing in loop from step 1." << std::endl;
-    //             }
-    //         }
-
-    //         std::cout << "Automatic steps execution completed." << std::endl;
-
-    //         m_is_automatic_steps_work = false;
-    //     }
-    //     ui->button_execute->setEnabled(true);
-    // });
-    // t.detach();
 }
 
 void MainWindow::handleMotionCompleted()
 {
     std::cout << "MOTION COMPLETED!" << std::endl;
-    *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::NONE);
+    *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::IDLE);
     ui->button_execute->setEnabled(true);
 }
 

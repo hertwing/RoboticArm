@@ -45,9 +45,9 @@ private:
     std::unique_ptr<InetCommHandler<OdinControlSelection>> m_control_selection_comm_handler;
     std::unique_ptr<ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
 
-    std::unique_ptr<InetCommHandler<ScriptedMotionStepStatus>> m_scripted_motion_request_inet_handler;
-    std::unique_ptr<ShmemHandler<ScriptedMotionStepStatus>> m_scripted_motion_request_shmem_status;
-    std::unique_ptr<ShmemHandler<ScriptedMotionStepStatus>> m_scripted_motion_reply_shmem_status;
+    std::unique_ptr<InetCommHandler<ScriptedMotionStepData>> m_scripted_motion_request_inet_handler;
+    std::unique_ptr<ShmemHandler<ScriptedMotionStepData>> m_scripted_motion_request_shmem_status;
+    std::unique_ptr<ShmemHandler<ScriptedMotionStepData>> m_scripted_motion_reply_shmem_status;
 
     std::unique_ptr<InetCommHandler<OdinServoStep>> m_scripted_motion_step_inet_handler;
     std::unique_ptr<ShmemHandler<OdinServoStep>> m_scripted_motion_step_shmem_handler;
