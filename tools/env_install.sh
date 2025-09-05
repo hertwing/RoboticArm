@@ -75,3 +75,24 @@ cd ..
 
 #sudo apt update
 #sudo apt install -y libopencv-dev python3-opencv
+
+# git clone https://github.com/jgarff/rpi_ws281x.git
+# cd rpi_ws281x
+# 
+# cat > toolchain-arm.cmake <<'EOF'
+# set(CMAKE_SYSTEM_NAME Linux)
+# set(CMAKE_SYSTEM_PROCESSOR aarch64)
+
+# set(CMAKE_C_COMPILER   /usr/bin/aarch64-linux-gnu-gcc)
+# set(CMAKE_CXX_COMPILER /usr/bin/aarch64-linux-gnu-g++)
+
+# set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# EOF
+# mkdir -p build-aarch64 && cd build-aarch64
+# cmake -S .. -B . \
+#   -DCMAKE_TOOLCHAIN_FILE=../toolchain-aarch64.cmake \
+#   -DCMAKE_BUILD_TYPE=Release \
+#   -DCMAKE_C_FLAGS="-fPIC"          # pas bezpieczeństwa, CMake PIC już włączony
+# cmake --build . -j
+# cp "$(find . -maxdepth 3 -name libws2811.a | head -n1)" "$HOME/rpi-sysroot/usr/lib/"
+# cp ../ws2811.h ../rpihw.h ../pwm.h  $HOME/rpi-sysroot/usr/include/

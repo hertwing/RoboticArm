@@ -2,10 +2,6 @@ cmake_minimum_required(VERSION 3.5)
 
 project(odin_gui VERSION 0.1 LANGUAGES CXX)
 
-if (NOT BUILD_ARM)
-    set(CMAKE_PREFIX_PATH $ENV{HOME}/qt-host)
-endif (NOT BUILD_ARM)
-
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)

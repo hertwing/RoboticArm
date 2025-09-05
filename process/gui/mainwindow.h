@@ -18,6 +18,8 @@
 #include <memory>
 #include <vector>
 
+#include <opencv2/core.hpp>
+
 #include "ScriptedMotionWorker.h"
 
 #include "InetCommData.h"
@@ -133,6 +135,9 @@ private:
     void clear_line_edits();
     void scan_automatic_files();
     void handle_num_buttons(char num);
+    static cv::Mat qimageToMatRGB(const QImage& img);
+    static QImage matToQImageRGB(const cv::Mat& m);
+    QImage drawMotionBox(const QImage& src);
 
 private:
     QThread* m_motionThread = nullptr;
@@ -141,6 +146,13 @@ private:
 private:
     Ui::MainWindow * ui;
     V4L2Capture* m_cap = nullptr;
+    QImage m_lastFrame;
+    cv::Mat m_prevGray;
+    bool m_havePrev = false;
+    int m_minArea = 10;           
+    int m_processEveryN = 1;
+    int m_frameCount = 0;
+
     bool m_joypad_enabled;
     bool m_automatic_enabled;
     bool m_diagnostic_enabled;

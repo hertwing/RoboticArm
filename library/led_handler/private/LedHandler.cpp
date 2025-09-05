@@ -79,26 +79,12 @@ void LedHandler::updateLedColors()
 {
     if (m_shmem_handler->shmemRead(m_led_color_status))
     {
-        // Check if colors changed
-        // std::cout << "Updating Led colors" << std::endl;
-        // for (int i = 0; i < led_handler::LED_COUNT; ++i)
-        // {
-        //     if (m_ledstring.channel[0].leds[i] != m_led_color_status[i])
-        //     {
-        //         m_is_color_changed = true;
-        //     }
-        // }
-        // if (m_is_color_changed)
-        // {
-
-        //     std::cout << "Color changed" << std::endl;
         // Update every 20 ms
         for (int i = 0; i < led_handler::LED_COUNT; ++i)
         {
             m_ledstring.channel[0].leds[i] = m_led_color_status[i];
         }
         ws2811_render(&m_ledstring);
-        // }
         m_is_color_changed = false;
     }
     else

@@ -973,12 +973,108 @@ void MainWindow::on_button_table_clear_clicked()
 void MainWindow::onFrame(const QImage& img)
 {
     if (img.isNull()) return;
-    const QPixmap pm = QPixmap::fromImage(img).scaled(
+    m_lastFrame = img;
+
+    QImage withBox = drawMotionBox(img);
+
+    const QPixmap pm = QPixmap::fromImage(withBox).scaled(
         ui->camera_label->size(),
         Qt::KeepAspectRatio,
         Qt::SmoothTransformation
     );
     ui->camera_label->setPixmap(pm);
+}
+
+cv::Mat MainWindow::qimageToMatRGB(const QImage& img)
+{
+
+    QImage rgb = img.format() == QImage::Format_RGB888 ? img
+                                                       : img.convertToFormat(QImage::Format_RGB888);
+    return cv::Mat(rgb.height(), rgb.width(), CV_8UC3,
+                   const_cast<uchar*>(rgb.bits()), rgb.bytesPerLine()).clone();
+}
+
+QImage MainWindow::matToQImageRGB(const cv::Mat& m)
+{
+    CV_Assert(m.type() == CV_8UC3);
+    QImage img(m.data, m.cols, m.rows, m.step, QImage::Format_RGB888);
+    return img.copy();
+}
+
+QImage MainWindow::drawMotionBox(const QImage& src)
+{
+    // 1) Konwersja do cv::Mat (RGB)
+    cv::Mat frameRGB = qimageToMatRGB(src);
+
+    // (opcjonalnie) zmniejsz na szybkie przetwarzanie:
+    cv::Mat procRGB;
+    cv::resize(frameRGB, procRGB, cv::Size(), 0.75, 0.75, cv::INTER_AREA);
+
+    // 2) Gray + blur
+    cv::Mat gray, grayBlur;
+    cv::cvtColor(procRGB, gray, cv::COLOR_RGB2GRAY);
+    cv::GaussianBlur(gray, grayBlur, cv::Size(5,5), 0);
+
+    // 3) Jeśli nie mamy poprzedniej – zapisz i zwróć (bez ramki)
+    if (!m_havePrev) {
+        m_prevGray = grayBlur.clone();
+        m_havePrev = true;
+        return src;
+    }
+
+    // co którąś klatkę (jeśli chcesz odciążyć CPU)
+    m_frameCount++;
+    if (m_frameCount % m_processEveryN != 0) {
+        return src;
+    }
+
+    // 4) Różnica |prev - curr| → prog → morfologia
+    cv::Mat diff, thresh;
+    cv::absdiff(m_prevGray, grayBlur, diff);
+    cv::threshold(diff, thresh, 8, 255, cv::THRESH_BINARY); // próg czułości ruchu
+    cv::morphologyEx(thresh, thresh, cv::MORPH_OPEN,
+                     cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3)));
+    cv::dilate(thresh, thresh, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5,5)), 
+               cv::Point(-1,-1), 1);
+
+    // 5) Kontury → największy obszar
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(thresh, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+    cv::Rect bestBox;
+    int bestArea = 0;
+    for (const auto& c : contours) {
+        cv::Rect r = cv::boundingRect(c);
+        int area = r.area();
+        if (area > m_minArea && area > bestArea) {
+            bestArea = area;
+            bestBox = r;
+        }
+    }
+
+    // 6) Aktualizuj poprzednią klatkę (powoli doganiaj tło – mniej “ghostingu”)
+    // możesz też zastosować running average; tu po prostu podmieniamy:
+    m_prevGray = grayBlur.clone();
+
+    // 7) Jeśli coś znaleziono — przeskaluj bbox do rozmiaru oryginalnego i narysuj
+    if (bestArea > 0) {
+        // skalowanie współrzędnych, bo przetwarzaliśmy obraz zmniejszony
+        double sx = static_cast<double>(frameRGB.cols) / procRGB.cols;
+        double sy = static_cast<double>(frameRGB.rows) / procRGB.rows;
+        cv::Rect boxScaled(
+            static_cast<int>(bestBox.x * sx),
+            static_cast<int>(bestBox.y * sy),
+            static_cast<int>(bestBox.width * sx),
+            static_cast<int>(bestBox.height * sy)
+        );
+
+        // rysuj w obrazie RGB (cv) i wróć do QImage
+        cv::rectangle(frameRGB, boxScaled, cv::Scalar(255, 0, 0), 2, cv::LINE_AA);
+        return matToQImageRGB(frameRGB);
+    }
+
+    // Brak ruchu → zwróć oryginał
+    return src;
 }
 
 void MainWindow::onFatal(const QString& msg)

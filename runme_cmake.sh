@@ -11,6 +11,7 @@ while [[ $# -gt 0 ]]; do
     --arm)
       RPI_TOOLCHAIN_CMAKE="-DCMAKE_TOOLCHAIN_FILE=${PROJECT_PATH}/rpi_toolchain.cmake"
       BUILD_PATH="${PROJECT_PATH}/build/arm"
+      EXTRA_ARGS="${EXTRA_ARGS} -DBUILD_ARM=ON"
       EXTRA_ARGS="${EXTRA_ARGS} -DCMAKE_PREFIX_PATH=$HOME/qt-raspi"
       EXTRA_ARGS="${EXTRA_ARGS} -DQt6_DIR=$HOME/qt-raspi/lib/cmake/Qt6"
       EXTRA_ARGS="${EXTRA_ARGS} -DOpenCV_DIR=$HOME/rpi-sysroot/usr/lib/aarch64-linux-gnu/cmake/opencv4"
