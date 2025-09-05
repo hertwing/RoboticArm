@@ -17,6 +17,10 @@
 #include <QMessageBox>
 #include <QPixmap>
 
+#include <opencv2/imgproc.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
+
 MainWindow::MainWindow(QWidget * parent):
     QMainWindow(parent),
     ui(new Ui::MainWindow),

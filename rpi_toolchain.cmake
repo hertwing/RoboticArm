@@ -1,31 +1,21 @@
-SET(CMAKE_SYSTEM_NAME Linux)
-SET(CMAKE_SYSTEM_PROCESSOR arm)
-SET(CMAKE_SYSTEM_VERSION 1)
-SET(CMAKE_CORSSCOMPILING TRUE)
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR aarch64)
 
-# Where is the target environment
-SET(CMAKE_FIND_ROOT_PATH /home/piotr/rpi-sysroot)
+set(CMAKE_SYSROOT "$ENV{HOME}/rpi-sysroot")
 
-# TODO: Create scripts for gcc installation
-# Specify the cross compiler
-SET(CMAKE_C_COMPILER   /usr/bin/aarch64-linux-gnu-gcc)
-SET(CMAKE_CXX_COMPILER /usr/bin/aarch64-linux-gnu-g++)
-SET(CMAKE_LIBRARY_ARCHITECTURE aarch64-linux-gnu)
+set(CMAKE_C_COMPILER   /usr/bin/aarch64-linux-gnu-gcc)
+set(CMAKE_CXX_COMPILER /usr/bin/aarch64-linux-gnu-g++)
 
-# Search for programs only in the build host directories
-SET(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH "${CMAKE_SYSROOT}")
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 
-# Search for libraries and headers only in the target directories
-SET(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-SET(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE BOTH)
 
-link_directories(
-    ${CMAKE_SYSROOT}/lib/
-    ${CMAKE_SYSROOT}/lib/aarch64-linux-gnu/
-    ${CMAKE_SYSROOT}/usr/lib/
-)
-
-include_directories(
-    ${CMAKE_SYSROOT}/usr/include/
-    ${CMAKE_SYSROOT}/usr/lib/aarch64-linux-gnu/
-)
+set(ENV{PKG_CONFIG_DIR} "")
+set(ENV{PKG_CONFIG_SYSROOT_DIR} "${CMAKE_SYSROOT}")
+set(ENV{PKG_CONFIG_LIBDIR}
+    "${CMAKE_SYSROOT}/usr/lib/aarch64-linux-gnu/pkgconfig:
+     ${CMAKE_SYSROOT}/usr/lib/pkgconfig:
+     ${CMAKE_SYSROOT}/usr/share/pkgconfig")

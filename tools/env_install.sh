@@ -73,3 +73,5 @@ cd ..
 # sudo apt-get install libpthread-stubs0-dev
 # sudi apt-get install libboost-all-dev
 
+#sudo apt update
+#sudo apt install -y libopencv-dev python3-opencv

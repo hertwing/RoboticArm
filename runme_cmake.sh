@@ -1,34 +1,33 @@
 #!/bin/bash
+set -e
 
 PROJECT_PATH=$(pwd)
 RPI_TOOLCHAIN_CMAKE=''
-ARM_BUILD_FLAG=''
 BUILD_PATH="${PROJECT_PATH}/build/x86"
+EXTRA_ARGS=''
 
 while [[ $# -gt 0 ]]; do
-    case $1 in
+  case $1 in
     --arm)
-        RPI_TOOLCHAIN_CMAKE="-DCMAKE_TOOLCHAIN_FILE=${PROJECT_PATH}/rpi_toolchain.cmake"
-        BUILD_PATH="${PROJECT_PATH}/build/arm"
-        ARM_BUILD_FLAG="-DBUILD_ARM=ON"
-        shift # past argument
-        ;;
+      RPI_TOOLCHAIN_CMAKE="-DCMAKE_TOOLCHAIN_FILE=${PROJECT_PATH}/rpi_toolchain.cmake"
+      BUILD_PATH="${PROJECT_PATH}/build/arm"
+      EXTRA_ARGS="${EXTRA_ARGS} -DCMAKE_PREFIX_PATH=$HOME/qt-raspi"
+      EXTRA_ARGS="${EXTRA_ARGS} -DQt6_DIR=$HOME/qt-raspi/lib/cmake/Qt6"
+      EXTRA_ARGS="${EXTRA_ARGS} -DOpenCV_DIR=$HOME/rpi-sysroot/usr/lib/aarch64-linux-gnu/cmake/opencv4"
+      shift;;
     -h|--help)
-        echo "Use --arm argument for RPI build."
-        exit 1
-        ;;
-    -*|--*)
-        echo "Unknown option $1"
-        exit 1
-        ;;
+      echo "Use --arm for RPi build."
+      exit 0;;
     *)
-        echo "Unknown option $1"
-        exit 1
-        ;;
-    esac
+      echo "Unknown option $1"; exit 1;;
+  esac
 done
 
-mkdir -p $BUILD_PATH
-cd $BUILD_PATH
-# cmake $ARM_BUILD_FLAG $PROJECT_PATH
-${HOME}/qt-raspi/bin/qt-cmake $ARM_BUILD_FLAG $PROJECT_PATH/CMakeLists.txt
+mkdir -p "$BUILD_PATH"
+cd "$BUILD_PATH"
+
+$HOME/qt-raspi/bin/qt-cmake \
+  ${RPI_TOOLCHAIN_CMAKE} \
+  ${EXTRA_ARGS} \
+  -DCMAKE_BUILD_TYPE=Release \
+  "$PROJECT_PATH"

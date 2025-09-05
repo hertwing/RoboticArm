@@ -15,8 +15,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(QT_DEBUG_FIND_PACKAGE ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Charts)
+find_package(QT NAMES Qt6 REQUIRED COMPONENTS Widgets Charts)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Charts)
+find_package(OpenCV REQUIRED)
 
 set(PROJECT_SOURCES
     main.cpp
@@ -65,7 +66,8 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE library_shmem_handler
     PRIVATE library_diagnostic_handler
     PRIVATE library_inet_comm_handler
-    PRIVATE stdc++fs)
+    PRIVATE stdc++fs
+    PRIVATE ${OpenCV_LIBS})
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
