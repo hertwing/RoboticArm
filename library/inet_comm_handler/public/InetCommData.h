@@ -12,6 +12,7 @@ static constexpr std::uint16_t DIAGNOSTIC_SOCKET_PORT = 7071;
 static constexpr std::uint16_t CONTROL_SELECTION_PORT = 7072;
 static constexpr std::uint16_t SCRIPTED_MOTION_REQUEST_PORT = 7073;
 static constexpr std::uint16_t SCRIPTED_MOTION_SERVO_DATA_PORT = 7074;
+static constexpr std::uint16_t VIDEO_PORT = 7075;
 
 typedef std::uint8_t scripted_motion_status_t;
 

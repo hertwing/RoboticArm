@@ -1,6 +1,12 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
-#include "v4l2capture.h"
+#include "StyleSheets.h"
+
+#include "InetCommData.h"
+#include "odin/video_handler/DataTypes.h"
+
+#include <endian.h> // be64toh
+#include <arpa/inet.h> // ntohl/ntohs
 
 #include <chrono>
 #include <filesystem>
@@ -9,6 +15,8 @@
 #include <string>
 #include <thread>
 
+#include <QButtonGroup>
+#include <QPushButton>
 #include <QList>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -16,37 +24,90 @@
 #include <QThread>
 #include <QMessageBox>
 #include <QPixmap>
+#include <QResource>
+#include <QStandardPaths>
+#include <QPainter>
+#include <QPen>
+#include <QFile>
 
-#include <opencv2/imgproc.hpp>
 #include <opencv2/core.hpp>
-#include <opencv2/highgui.hpp>
+
+using namespace odin::video_handler;
 
 MainWindow::MainWindow(QWidget * parent):
     QMainWindow(parent),
     ui(new Ui::MainWindow),
-    m_joypad_enabled(false),
-    m_automatic_enabled(false),
-    m_camera_enabled(false),
-    m_diagnostic_enabled(false),
-    m_diagnostic_board_selected(static_cast<bool>(BoardSelect::GUI)),
-    m_chart_swap(0),
+    m_diagnostic_board_selected(BoardSelect::GUI),
     m_automatic_line_edit_select(static_cast<std::uint8_t>(AutomaticLineEditSelect::NONE)),
-    m_is_servo_num_valid(false),
-    m_is_servo_pos_valid(false),
-    m_is_servo_speed_valid(false),
-    m_is_delay_valid(false),
     m_run_in_loop(false),
-    m_is_automatic_steps_work(false),
     m_scripted_motion_files_path(std::filesystem::path(odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_FILES_PATH))
 {
     ui->setupUi(this);
 
-    m_cap = new V4L2Capture("/dev/video0", 1280, 720, 30, this);
+    m_stepsModel = new OdinStepsModel(this);
+    ui->table_servo_steps->setModel(m_stepsModel);
+    ui->table_servo_steps->setSelectionBehavior(QAbstractItemView::SelectRows);
+    ui->table_servo_steps->setSelectionMode(QAbstractItemView::SingleSelection);
 
-    connect(m_cap, &V4L2Capture::frameReady, this, &MainWindow::onFrame, Qt::QueuedConnection);
-    connect(m_cap, &V4L2Capture::fatalError, this, &MainWindow::onFatal, Qt::QueuedConnection);
+    auto* tv = ui->table_servo_steps;
+    tv->verticalHeader()->setVisible(true);
+    tv->verticalHeader()->setFixedWidth(42);
+    tv->verticalHeader()->setDefaultAlignment(Qt::AlignCenter);
 
-    m_cap->start();
+    auto* idLabel = new QLabel("ID", tv);
+    idLabel->setAlignment(Qt::AlignCenter);
+    idLabel->setStyleSheet(AUTO_MOTION_ID_COLUMN_STYLE_SHEET);
+    tv->setCornerWidget(idLabel);
+
+    auto* hh = tv->horizontalHeader();
+    hh->setStretchLastSection(false);
+    for (int c = 0; c < OdinStepsModel::Column::ColCount; ++c)
+        hh->setSectionResizeMode(c, QHeaderView::Stretch);
+
+    tv->setAlternatingRowColors(true);
+    tv->setShowGrid(true);
+
+    auto group = new QButtonGroup(this);
+    group->addButton(ui->radioButton_servo_num,   static_cast<int>(AutomaticLineEditSelect::SERVO_NUM));
+    group->addButton(ui->radioButton_servo_pos,   static_cast<int>(AutomaticLineEditSelect::SERVO_POS));
+    group->addButton(ui->radioButton_servo_speed, static_cast<int>(AutomaticLineEditSelect::SERVO_SPEED));
+    group->addButton(ui->radioButton_delay,       static_cast<int>(AutomaticLineEditSelect::DELAY));
+
+    connect(group, &QButtonGroup::idToggled,
+            this,  &MainWindow::onRadioGroupToggled);
+
+    ui->lineEdit_servo_num->setValidator(new QIntValidator(1, 6, this));
+    ui->lineEdit_servo_pos->setValidator(new QIntValidator(500, 2500, this));
+    ui->lineEdit_servo_speed->setValidator(new QIntValidator(1, 10, this));
+    ui->lineEdit_delay->setValidator(new QIntValidator(0, 10000, this));
+
+    QMainWindow::showFullScreen();
+
+    cv::setNumThreads(1);
+    m_uiTimer.start();
+    const bool cascadeOk = loadFaceCascadeFromResource();
+
+    m_rx = new UdpMjpegReceiver(this);
+    connect(m_rx, &UdpMjpegReceiver::frameReady, this, &MainWindow::onFrame);
+
+    // Worker
+    if (cascadeOk) {
+        m_faceThread = new QThread(this);
+        m_CvWorker = new CvWorker(m_cascade_tmp_path);
+        m_CvWorker->moveToThread(m_faceThread);
+        connect(m_faceThread, &QThread::finished, m_CvWorker, &QObject::deleteLater);
+        // Worker output goes back to GUI
+        connect(m_CvWorker, &CvWorker::result, this, [this](bool found, const QRect& r){
+            m_haveFaceQt = found;
+            if (found) m_lastFaceQt = r;
+            m_faceBusy = false;
+        });
+        m_faceThread->start();
+    } else {
+        std::cout << "[GUI] Face detection disabled (no cascade)" << std::endl;
+    }
+
+    m_fullDetectTimer.start();
     
     m_scripted_motion_request_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::IDLE));
     m_scripted_motion_reply_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::IDLE));
@@ -54,7 +115,6 @@ MainWindow::MainWindow(QWidget * parent):
     
     scan_automatic_files();
 
-    m_automatic_steps_count = ui->table_servo_steps->rowCount();
     // Shmem readers and writers
     std::cout << "Creating SHMEM readers and writers" << std::endl;
     std::cout << "Creating control selection SHMEM fd." << std::endl;
@@ -83,24 +143,44 @@ MainWindow::MainWindow(QWidget * parent):
     m_motionWorker->setStepsVectorPtr(m_automatic_steps);
     m_motionWorker->moveToThread(m_motionThread);
 
-    // connect(m_motionThread, &QThread::started, m_motionWorker, &ScriptedMotionWorker::processMotion);
     connect(m_motionWorker, &ScriptedMotionWorker::motionCompleted, this, &MainWindow::handleMotionCompleted);
-    // connect(m_motionWorker, &ScriptedMotionWorker::motionError, this, &MainWindow::handleMotionError);
-    // connect(m_motionWorker, &ScriptedMotionWorker::motionDisconnected, this, &MainWindow::handleMotionDisconnected);
     connect(this, &MainWindow::stopScriptedMotionRequested, m_motionWorker, &ScriptedMotionWorker::stopMotion);
     connect(m_motionWorker, &ScriptedMotionWorker::destroyed, m_motionThread, &QThread::quit);
     connect(m_motionThread, &QThread::finished, m_motionThread, &QThread::deleteLater);
 
     m_motionThread->start();
+    
+    m_charts = new ChartsPanel(
+    ui->chart_view_cpu_usage,
+    ui->chart_view_ram_usage,
+    ui->chart_view_cpu_temp,
+    ui->chart_view_latency,
+    this);
+    m_charts->setSnapshot(m_diagnostic_data);
 
-    draw_charts();
     draw_menu();
+
+    const QList<QPushButton*> digitBtns = {
+        ui->button_0, ui->button_1, ui->button_2, ui->button_3, ui->button_4,
+        ui->button_5, ui->button_6, ui->button_7, ui->button_8, ui->button_9
+    };
+    for (auto* b : digitBtns) connect(b, &QPushButton::clicked, this, &MainWindow::handleDigitButtonClicked);
+
+    m_line_edits = {
+        ui->lineEdit_servo_num,
+        ui->lineEdit_servo_pos,
+        ui->lineEdit_servo_speed,
+        ui->lineEdit_delay
+    };
 }
 
 MainWindow::~MainWindow()
-{
-    if (m_cap) m_cap->stop();
-    
+{    
+    if (m_faceThread) 
+    {
+        m_faceThread->quit();
+        m_faceThread->wait();
+    }
     if (m_motionWorker) m_motionWorker->stopMotion();
 
     if (m_motionThread)
@@ -108,48 +188,82 @@ MainWindow::~MainWindow()
         m_motionThread->quit();
         m_motionThread->wait();
     }
-
-    const auto * cpu_usage_chart_ptr = ui->chart_view_cpu_usage->chart();
-    const auto * ram_usage_chart_ptr = ui->chart_view_ram_usage->chart();
-    const auto * cpu_temp_chart_ptr = ui->chart_view_cpu_temp->chart();
-    const auto * latency_chart_ptr = ui->chart_view_latency->chart();
+    delete m_diagnostic_timer;
 
     delete ui;
-
-    delete cpu_usage_chart_ptr;
-    delete ram_usage_chart_ptr;
-    delete cpu_temp_chart_ptr;
-    delete latency_chart_ptr;
-    delete m_diagnostic_timer;
 }
 
 void MainWindow::draw_menu()
 {
     // Buttons
-    ui->button_joypad->setStyleSheet(m_disabled_joypad_style_sheet);
-    ui->button_automatic->setStyleSheet(m_disabled_automatic_style_sheet);
-    ui->button_camera->setStyleSheet(m_disabled_camera_style_sheet);
-    ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
-    ui->button_exit->setStyleSheet(m_button_exit_style_sheet);
-    ui->button_rpi_switch->setStyleSheet(m_button_rpi_switch_gui_style_sheet);
+    ui->button_joypad->setStyleSheet(DISABLED_JOYPAD_STYLE_SHEET);
+    ui->button_automatic->setStyleSheet(DISABLED_AUTOMATIC_STYLE_SHEET);
+    ui->button_camera->setStyleSheet(DISABLED_CAMERA_STYLE_SHEET);
+    ui->button_diagnostic->setStyleSheet(DISABLED_DIAGNOSTIC_STYLE_SHEET);
+    ui->button_exit->setStyleSheet(BUTTON_EXIT_STYLE_SHEET);
+    ui->button_rpi_switch->setStyleSheet(BUTTON_RPI_SWITCH_GUI_STYLE_SHEET);
     // Widgets
     ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
-    ui->widget_cpu_temp->setStyleSheet(m_diagnostic_widget_style_sheet);
-    ui->widget_cpu_temp_chart->setStyleSheet(m_diagnostic_chart_widget_style_sheet);
-    ui->widget_cpu_usage->setStyleSheet(m_diagnostic_widget_style_sheet);
-    ui->widget_cpu_usage_chart->setStyleSheet(m_diagnostic_chart_widget_style_sheet);
-    ui->widget_ram_usage->setStyleSheet(m_diagnostic_widget_style_sheet);
-    ui->widget_ram_usage_chart->setStyleSheet(m_diagnostic_chart_widget_style_sheet);
-    ui->widget_latency->setStyleSheet(m_diagnostic_widget_style_sheet);
-    ui->widget_latency_chart->setStyleSheet(m_diagnostic_chart_widget_style_sheet);
+    ui->widget_cpu_temp->setStyleSheet(DIAGNOSTIC_WIDGET_STYLE_SHEET);
+    ui->widget_cpu_temp_chart->setStyleSheet(DIAGNOSTIC_CHART_WIDGET_STYLE_SHEET);
+    ui->widget_cpu_usage->setStyleSheet(DIAGNOSTIC_WIDGET_STYLE_SHEET);
+    ui->widget_cpu_usage_chart->setStyleSheet(DIAGNOSTIC_CHART_WIDGET_STYLE_SHEET);
+    ui->widget_ram_usage->setStyleSheet(DIAGNOSTIC_WIDGET_STYLE_SHEET);
+    ui->widget_ram_usage_chart->setStyleSheet(DIAGNOSTIC_CHART_WIDGET_STYLE_SHEET);
+    ui->widget_latency->setStyleSheet(DIAGNOSTIC_WIDGET_STYLE_SHEET);
+    ui->widget_latency_chart->setStyleSheet(DIAGNOSTIC_CHART_WIDGET_STYLE_SHEET);
     // Labels
-    ui->label_cpu_usage->setStyleSheet(m_diagnostic_label_style_sheet);
-    ui->label_cpu_temp->setStyleSheet(m_diagnostic_label_style_sheet);
-    ui->label_ram_usage->setStyleSheet(m_diagnostic_label_style_sheet);
-    ui->label_latency->setStyleSheet(m_diagnostic_label_style_sheet);
+    ui->label_cpu_usage->setStyleSheet(DIAGNOSTIC_LABEL_STYLE_SHEET);
+    ui->label_cpu_temp->setStyleSheet(DIAGNOSTIC_LABEL_STYLE_SHEET);
+    ui->label_ram_usage->setStyleSheet(DIAGNOSTIC_LABEL_STYLE_SHEET);
+    ui->label_latency->setStyleSheet(DIAGNOSTIC_LABEL_STYLE_SHEET);
     ui->label_rpi_switch->setText("GUI board diagnostic data");
-    // Charts
-    QMainWindow::showFullScreen();
+}
+
+void MainWindow::switchMode(UIMode m)
+{
+    if (m == m_mode) return;
+
+    if (m == UIMode::DIAGNOSTIC) {
+        if (m_diagnostic_timer) m_diagnostic_timer->start(300);
+    } else {
+        if (m_diagnostic_timer) m_diagnostic_timer->stop();
+    }
+
+    switch (m) {
+        case UIMode::MAIN:       ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN)); break;
+        case UIMode::JOYPAD:     ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::JOYPAD)); break;
+        case UIMode::CAMERA:     ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::CAMERA)); break;
+        case UIMode::DIAGNOSTIC: ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::DIAGNOSTIC)); break;
+        case UIMode::AUTOMATIC:  ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::AUTOMATIC)); break;
+    }
+
+    auto setOn  = [](QPushButton* b, const QString& on){ b->setStyleSheet(on);  };
+    auto setOff = [](QPushButton* b, const QString& off){ b->setStyleSheet(off);};
+
+    setOff(ui->button_joypad,     DISABLED_JOYPAD_STYLE_SHEET);
+    setOff(ui->button_camera,     DISABLED_CAMERA_STYLE_SHEET);
+    setOff(ui->button_diagnostic, DISABLED_DIAGNOSTIC_STYLE_SHEET);
+    setOff(ui->button_automatic,  DISABLED_AUTOMATIC_STYLE_SHEET);
+
+    switch (m) {
+        case UIMode::JOYPAD:     setOn(ui->button_joypad,     ENABLED_JOYPAD_STYLE_SHEET);     break;
+        case UIMode::CAMERA:     setOn(ui->button_camera,     ENABLED_CAMERA_STYLE_SHEET);     break;
+        case UIMode::DIAGNOSTIC: setOn(ui->button_diagnostic, ENABLED_DIAGNOSTIC_STYLE_SHEET); break;
+        case UIMode::AUTOMATIC:  setOn(ui->button_automatic,  ENABLED_AUTOMATIC_STYLE_SHEET);  break;
+        default: break;
+    }
+
+    switch (m) {
+        case UIMode::JOYPAD:     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::JOYPAD); break;
+        case UIMode::CAMERA:     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::CAMERA); break;
+        case UIMode::DIAGNOSTIC: m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::DIAGNOSTIC); break;
+        case UIMode::AUTOMATIC:  m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::AUTOMATIC); break;
+        case UIMode::MAIN:       m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE); break;
+    }
+    m_control_selection_shmem_handler->shmemWrite(&m_control_selection);
+
+    m_mode = m;
 }
 
 void MainWindow::on_button_exit_clicked()
@@ -157,408 +271,95 @@ void MainWindow::on_button_exit_clicked()
     MainWindow::close();
 }
 
-void MainWindow::on_button_joypad_clicked()
-{
-    // Turn off camera
-    if (m_camera_enabled)
-    {
-        m_camera_enabled = false;
-        ui->button_camera->setStyleSheet(m_disabled_camera_style_sheet);
-    }
-    // Turn off automatic
-    if (m_automatic_enabled)
-    {
-        m_automatic_enabled = false;
-        ui->button_automatic->setStyleSheet(m_disabled_automatic_style_sheet);
-    }
-    // Turn off diagnostic
-    if (m_diagnostic_enabled)
-    {
-        m_diagnostic_enabled = false;
-        ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
-    }
-
-    m_joypad_enabled = !m_joypad_enabled;
-    m_joypad_enabled ? m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::JOYPAD) : m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
-    m_control_selection_shmem_handler->shmemWrite(&m_control_selection);
-    m_joypad_enabled ? show_joypad() : hide_joypad();
-}
-
-void MainWindow::on_button_diagnostic_clicked()
-{
-    // TODO: Rewrite to not turn off control option
-    // Turn off joypad
-    if (m_joypad_enabled)
-    {
-        m_joypad_enabled = false;
-        ui->button_joypad->setStyleSheet(m_disabled_joypad_style_sheet);
-    }
-    // Turn off camera
-    if (m_camera_enabled)
-    {
-        m_camera_enabled = false;
-        ui->button_camera->setStyleSheet(m_disabled_camera_style_sheet);
-    }
-    // Turn off automatic
-    if (m_automatic_enabled)
-    {
-        m_automatic_enabled = false;
-        ui->button_automatic->setStyleSheet(m_disabled_automatic_style_sheet);
-    }
-
-    m_diagnostic_enabled = !m_diagnostic_enabled;
-    m_diagnostic_enabled ? m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::DIAGNOSTIC) : m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
-    m_control_selection_shmem_handler->shmemWrite(&m_control_selection);
-    m_diagnostic_enabled ? show_diagnostics() : hide_diagnostics();
-}
-
-void MainWindow::on_button_automatic_clicked()
-{
-    // Turn off camera
-    if (m_camera_enabled)
-    {
-        m_camera_enabled = false;
-        ui->button_camera->setStyleSheet(m_disabled_camera_style_sheet);
-    }
-    // Turn off joypad
-    if (m_joypad_enabled)
-    {
-        m_joypad_enabled = false;
-        ui->button_joypad->setStyleSheet(m_disabled_joypad_style_sheet);
-    }
-    // Turn off diagnostic
-    if (m_diagnostic_enabled)
-    {
-        m_diagnostic_enabled = false;
-        ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
-    }
-
-    m_automatic_enabled = !m_automatic_enabled;
-    m_automatic_enabled ? m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::AUTOMATIC) : m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
-    m_control_selection_shmem_handler->shmemWrite(&m_control_selection);
-    m_automatic_enabled ? show_automatic() : hide_automatic();
-}
-
-
-void MainWindow::on_button_camera_clicked()
-{
-    // Turn off joypad
-    if (m_joypad_enabled)
-    {
-        m_joypad_enabled = false;
-        ui->button_joypad->setStyleSheet(m_disabled_joypad_style_sheet);
-    }
-    // Turn off diagnostic
-    if (m_diagnostic_enabled)
-    {
-        m_diagnostic_enabled = false;
-        ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
-    }
-    // Turn off automatic
-    if (m_automatic_enabled)
-    {
-        m_automatic_enabled = false;
-        ui->button_automatic->setStyleSheet(m_disabled_automatic_style_sheet);
-    }
-
-    m_camera_enabled = !m_camera_enabled;
-    m_camera_enabled ? m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::CAMERA) : m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
-    m_control_selection_shmem_handler->shmemWrite(&m_control_selection);
-    m_camera_enabled ? show_camera() : hide_camera();
-}
+void MainWindow::on_button_joypad_clicked()     { switchMode(m_mode == UIMode::JOYPAD     ? UIMode::MAIN : UIMode::JOYPAD); }
+void MainWindow::on_button_camera_clicked()     { switchMode(m_mode == UIMode::CAMERA     ? UIMode::MAIN : UIMode::CAMERA); }
+void MainWindow::on_button_diagnostic_clicked() { switchMode(m_mode == UIMode::DIAGNOSTIC ? UIMode::MAIN : UIMode::DIAGNOSTIC); }
+void MainWindow::on_button_automatic_clicked()  { switchMode(m_mode == UIMode::AUTOMATIC  ? UIMode::MAIN : UIMode::AUTOMATIC); }
 
 void MainWindow::on_button_rpi_switch_clicked()
 {
-    m_diagnostic_board_selected = !m_diagnostic_board_selected;
-    m_diagnostic_board_selected ? ui->button_rpi_switch->setStyleSheet(m_button_rpi_switch_arm_style_sheet) : ui->button_rpi_switch->setStyleSheet(m_button_rpi_switch_gui_style_sheet);
-    m_diagnostic_board_selected ? ui->label_rpi_switch->setText("ARM board diagnostic data") : ui->label_rpi_switch->setText("GUI board diagnostic data");
+    m_diagnostic_board_selected =
+        (m_diagnostic_board_selected == BoardSelect::GUI) ? BoardSelect::ARM : BoardSelect::GUI;
 
-    // Zero chart bins
-    for (std::uint8_t i = 0; i < INT_CHARTS_COUNT; ++i)
+    ui->button_rpi_switch->setStyleSheet(
+        (m_diagnostic_board_selected == BoardSelect::ARM) ? BUTTON_RPI_SWITCH_ARM_STYLE_SHEET
+                                                          : BUTTON_RPI_SWITCH_GUI_STYLE_SHEET);
+    ui->label_rpi_switch->setText(
+        (m_diagnostic_board_selected == BoardSelect::ARM) ? "ARM board diagnostic data"
+                                                          : "GUI board diagnostic data");
+
+    DiagnosticData snap{};
+    if (readDiagnosticOnceFor(m_diagnostic_board_selected, snap))
     {
-        for (std::uint8_t j = 0; j < CHART_BINS; ++j)
-        {
-            m_charts_data[i][j] = 0;
-        }
+        if (m_charts) m_charts->setSnapshot(snap);
+    } 
+    else 
+    {
+        if (m_charts) m_charts->setSnapshot(DiagnosticData{});
     }
 }
 
 void MainWindow::disable_buttons()
 {
-    ui->button_joypad->setStyleSheet(m_disabled_joypad_style_sheet);
-    ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
-    ui->button_automatic->setStyleSheet(m_disabled_automatic_style_sheet);
-}
-
-void MainWindow::show_camera()
-{
-    ui->stackedWidget->show();
-    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::CAMERA));
-    ui->button_camera->setStyleSheet(m_enabled_camera_style_sheet);
-}
-
-void MainWindow::hide_camera()
-{
-    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
-    ui->button_camera->setStyleSheet(m_disabled_camera_style_sheet);
-}
-
-void MainWindow::show_joypad()
-{
-    ui->stackedWidget->show();
-    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::JOYPAD));
-    ui->button_joypad->setStyleSheet(m_enabled_joypad_style_sheet);
-}
-
-void MainWindow::hide_joypad()
-{
-    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
-    ui->button_joypad->setStyleSheet(m_disabled_joypad_style_sheet);
-}
-
-void MainWindow::show_diagnostics()
-{
-    ui->stackedWidget->show();
-    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::DIAGNOSTIC));
-    ui->button_diagnostic->setStyleSheet(m_enabled_diagnostic_style_sheet);
-}
-
-void MainWindow::hide_diagnostics()
-{
-    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
-    ui->button_diagnostic->setStyleSheet(m_disabled_diagnostic_style_sheet);
-}
-
-void MainWindow::show_automatic()
-{
-    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::AUTOMATIC));
-    ui->button_automatic->setStyleSheet(m_enabled_automatic_style_sheet);
-}
-
-void MainWindow::hide_automatic()
-{
-    ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
-    ui->button_automatic->setStyleSheet(m_disabled_automatic_style_sheet);
+    ui->button_joypad->setStyleSheet(DISABLED_JOYPAD_STYLE_SHEET);
+    ui->button_diagnostic->setStyleSheet(DISABLED_DIAGNOSTIC_STYLE_SHEET);
+    ui->button_automatic->setStyleSheet(DISABLED_AUTOMATIC_STYLE_SHEET);
 }
 
 void MainWindow::diagnosticTimerSlot()
 {
-    if (!m_diagnostic_board_selected)
+    if (m_diagnostic_board_selected == BoardSelect::GUI)
     {
         if (m_gui_diagnostic_shmem_handler->openShmem())
         {
-            if (!m_gui_diagnostic_shmem_handler->shmemRead(&m_gui_diagnostic_data))
+            if (!m_gui_diagnostic_shmem_handler->shmemRead(&m_diagnostic_data))
             {
-                std::cout << "Error while reading from arm diagnostic SHMEM" << std::endl;
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                std::cout << "Error while reading from gui diagnostic SHMEM" << std::endl;
             }
         }
         else
         {
-            m_gui_diagnostic_data.cpu_usage = 0;
-            m_gui_diagnostic_data.ram_usage = 0;
-            m_gui_diagnostic_data.cpu_temp = 0;
-            m_gui_diagnostic_data.latency = 0;
+            m_diagnostic_data.cpu_usage = 0;
+            m_diagnostic_data.ram_usage = 0;
+            m_diagnostic_data.cpu_temp = 0;
+            m_diagnostic_data.latency = 0;
         }
     }
     else
     {
         if (m_arm_diagnostic_shmem_handler->openShmem())
         {
-            if(!m_arm_diagnostic_shmem_handler->shmemRead(&m_gui_diagnostic_data))
+            if (!m_arm_diagnostic_shmem_handler->shmemRead(&m_diagnostic_data))
             {
                 std::cout << "Error while reading from arm diagnostic SHMEM" << std::endl;
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
         else
         {
-            m_gui_diagnostic_data.cpu_usage = 0;
-            m_gui_diagnostic_data.ram_usage = 0;
-            m_gui_diagnostic_data.cpu_temp = 0;
-            m_gui_diagnostic_data.latency = 0;
+            m_diagnostic_data.cpu_usage = 0;
+            m_diagnostic_data.ram_usage = 0;
+            m_diagnostic_data.cpu_temp = 0;
+            m_diagnostic_data.latency = 0;
         }
     }
-
-    // Fill charts bins with data
-    const auto * temp_charts_data = m_charts_data;
-    for (std::uint8_t i = 0; i < INT_CHARTS_COUNT; ++i)
-    {
-        for (std::uint8_t j = 0; j < CHART_BINS-1; ++j)
-        {
-            m_charts_data[i][j] = temp_charts_data[i][j+1];
-        }
-    }
-    // Get latest data to last char bin
-    m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_USAGE)][CHART_BINS-1] = m_gui_diagnostic_data.cpu_usage;
-    m_charts_data[static_cast<std::uint32_t>(ChartSelect::RAM_USAGE)][CHART_BINS-1] = m_gui_diagnostic_data.ram_usage;
-    m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_TEMP)][CHART_BINS-1] = m_gui_diagnostic_data.cpu_temp;
-    m_latency_chart_data = m_gui_diagnostic_data.latency;
 
     // Draw charts
-    draw_charts();
+    if (m_charts) m_charts->push(m_diagnostic_data);
 }
 
-void MainWindow::draw_charts()
+bool MainWindow::readDiagnosticOnceFor(BoardSelect src, DiagnosticData& out)
 {
-    m_chart_swap = !m_chart_swap;
-
-    m_cpu_usage_chart[m_chart_swap] = new QChart();
-    m_ram_usage_chart[m_chart_swap] = new QChart();
-    m_cpu_temp_chart[m_chart_swap] = new QChart();
-    m_latency_chart[m_chart_swap] = new QChart();
-    m_latency_chart[m_chart_swap]->setTitle(QString::number(m_latency_chart_data, 'f', 2) + "ms");
-
-    m_cpu_usage_axis_x[m_chart_swap] = new QBarCategoryAxis();
-    m_ram_usage_axis_x[m_chart_swap] = new QBarCategoryAxis();
-    m_cpu_temp_axis_x[m_chart_swap] = new QBarCategoryAxis();
-
-    m_cpu_usage_axis_x[m_chart_swap]->append(QString::number(+m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_USAGE)][CHART_BINS-1]) + "%");
-    m_ram_usage_axis_x[m_chart_swap]->append(QString::number(+m_charts_data[static_cast<std::uint32_t>(ChartSelect::RAM_USAGE)][CHART_BINS-1])+ "%");
-    m_cpu_temp_axis_x[m_chart_swap]->append(QString::number(+m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_TEMP)][CHART_BINS-1]) + "°C");
-
-    for(int i=0; i<CHART_BINS; ++i)
+    auto* h = (src == BoardSelect::GUI) ? m_gui_diagnostic_shmem_handler.get()
+                                        : m_arm_diagnostic_shmem_handler.get();
+    if (!h->openShmem())
     {
-        m_cpu_usage_set[m_chart_swap][i] = new QBarSet("");
-        m_ram_usage_set[m_chart_swap][i] = new QBarSet("");
-        m_cpu_usage_set[m_chart_swap][i]->append(m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_USAGE)][i]);
-        m_ram_usage_set[m_chart_swap][i]->append(m_charts_data[static_cast<std::uint32_t>(ChartSelect::RAM_USAGE)][i]);
-        m_cpu_usage_set[m_chart_swap][i]->setColor(QColor(239, 41, 41));
-        m_ram_usage_set[m_chart_swap][i]->setColor(QColor(114, 159, 207));
+        out = {}; return false;
     }
-
-    m_cpu_usage_series[m_chart_swap] = new QBarSeries();
-
-    m_ram_usage_series[m_chart_swap] = new QBarSeries();
-
-    m_cpu_temp_series[m_chart_swap] = new QLineSeries();
-    m_cpu_temp_series[m_chart_swap]->setColor(QColor(245, 121, 0));
-    auto pen = m_cpu_temp_series[m_chart_swap]->pen();
-    pen.setWidth(2);
-    m_cpu_temp_series[m_chart_swap]->setPen(pen);
-
-    m_latency_series[m_chart_swap] = new QPieSeries();
-
-    for (int i = 0; i < 2; ++i)
+    if (!h->shmemRead(&out))
     {
-        m_latency_slice[m_chart_swap][i] = new QPieSlice();
+        out = {}; return false;
     }
-
-    // Calculate latency percent
-    double latency_percent = (100.0 * m_latency_chart_data) / 20.0;
-    if (latency_percent > 100)
-    {
-        latency_percent = 100;
-    }
-
-    m_latency_slice[m_chart_swap][0]->setValue(latency_percent);
-    m_latency_slice[m_chart_swap][1]->setValue(100.0 - latency_percent);
-
-    latency_percent < 50 ? m_latency_slice[m_chart_swap][0]->setColor(QColor(138, 226, 52)) : m_latency_slice[m_chart_swap][0]->setColor(QColor(239, 41, 41));
-
-    m_latency_series[m_chart_swap]->append(m_latency_slice[m_chart_swap][0]);
-    m_latency_series[m_chart_swap]->append(m_latency_slice[m_chart_swap][1]);
-
-    m_latency_series[m_chart_swap]->setHoleSize(0.5);
-
-    for (std::uint8_t i = 0; i < CHART_BINS; ++i)
-    {
-        m_cpu_usage_series[m_chart_swap]->append(m_cpu_usage_set[m_chart_swap][i]);
-        m_ram_usage_series[m_chart_swap]->append(m_ram_usage_set[m_chart_swap][i]);
-        m_cpu_temp_series[m_chart_swap]->append(i, m_charts_data[static_cast<std::uint32_t>(ChartSelect::CPU_TEMP)][i]);
-    }
-
-    m_cpu_usage_chart[m_chart_swap]->addSeries(m_cpu_usage_series[m_chart_swap]);
-    m_ram_usage_chart[m_chart_swap]->addSeries(m_ram_usage_series[m_chart_swap]);
-    m_cpu_temp_chart[m_chart_swap]->addSeries(m_cpu_temp_series[m_chart_swap]);
-    m_latency_chart[m_chart_swap]->addSeries(m_latency_series[m_chart_swap]);
-
-    m_cpu_usage_chart[m_chart_swap]->createDefaultAxes();
-    m_ram_usage_chart[m_chart_swap]->createDefaultAxes();
-    m_cpu_temp_chart[m_chart_swap]->createDefaultAxes();
-
-    m_cpu_usage_chart[m_chart_swap]->setAxisX(m_cpu_usage_axis_x[m_chart_swap]);
-    m_cpu_usage_chart[m_chart_swap]->axisY()->setRange(0, 100);
-    m_ram_usage_chart[m_chart_swap]->setAxisX(m_ram_usage_axis_x[m_chart_swap]);
-    m_ram_usage_chart[m_chart_swap]->axisY()->setRange(0, 100);
-    m_cpu_temp_chart[m_chart_swap]->setAxisX(m_cpu_temp_axis_x[m_chart_swap]);
-    m_cpu_temp_chart[m_chart_swap]->axisY()->setRange(0, 100);
-
-    m_cpu_usage_chart[m_chart_swap]->legend()->hide();
-    m_ram_usage_chart[m_chart_swap]->legend()->hide();
-    m_cpu_temp_chart[m_chart_swap]->legend()->hide();
-    m_latency_chart[m_chart_swap]->legend()->hide();
-
-    const auto * cpu_usage_chart_ptr = ui->chart_view_cpu_usage->chart();
-    const auto * ram_usage_chart_ptr = ui->chart_view_ram_usage->chart();
-    const auto * cpu_temp_chart_ptr = ui->chart_view_cpu_temp->chart();
-    const auto * cpu_latency_ptr = ui->chart_view_latency->chart();
-
-    ui->chart_view_cpu_usage->setChart(m_cpu_usage_chart[m_chart_swap]);
-    ui->chart_view_ram_usage->setChart(m_ram_usage_chart[m_chart_swap]);
-    ui->chart_view_cpu_temp->setChart(m_cpu_temp_chart[m_chart_swap]);
-    ui->chart_view_latency->setChart(m_latency_chart[m_chart_swap]);
-
-    if (cpu_usage_chart_ptr != nullptr)
-    {
-        delete cpu_usage_chart_ptr;
-    }
-    if (cpu_usage_chart_ptr != nullptr)
-    {
-        delete ram_usage_chart_ptr;
-    }
-    if (cpu_temp_chart_ptr != nullptr)
-    {
-        delete cpu_temp_chart_ptr;
-    }
-    if (cpu_latency_ptr != nullptr)
-    {
-        delete cpu_latency_ptr;
-    }
-}
-
-void MainWindow::on_radioButton_servo_num_toggled(bool checked)
-{
-    if (checked)
-    {
-        ui->radioButton_servo_pos->setChecked(false);
-        ui->radioButton_servo_speed->setChecked(false);
-        ui->radioButton_delay->setChecked(false);
-        m_automatic_line_edit_select = static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_NUM);
-    }
-}
-
-void MainWindow::on_radioButton_servo_pos_toggled(bool checked)
-{
-    if (checked)
-    {
-        ui->radioButton_servo_num->setChecked(false);
-        ui->radioButton_servo_speed->setChecked(false);
-        ui->radioButton_delay->setChecked(false);
-        m_automatic_line_edit_select = static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_POS);
-    }
-}
-
-void MainWindow::on_radioButton_servo_speed_toggled(bool checked)
-{
-    if (checked)
-    {
-        ui->radioButton_servo_pos->setChecked(false);
-        ui->radioButton_servo_num->setChecked(false);
-        ui->radioButton_delay->setChecked(false);
-        m_automatic_line_edit_select = static_cast<std::uint8_t>(AutomaticLineEditSelect::SERVO_SPEED);
-    }
-}
-
-void MainWindow::on_radioButton_delay_toggled(bool checked)
-{
-    if (checked)
-    {
-        ui->radioButton_servo_pos->setChecked(false);
-        ui->radioButton_servo_speed->setChecked(false);
-        ui->radioButton_servo_num->setChecked(false);
-        m_automatic_line_edit_select = static_cast<std::uint8_t>(AutomaticLineEditSelect::DELAY);
-    }
+    return true;
 }
 
 void MainWindow::on_button_clear_clicked()
@@ -619,54 +420,13 @@ void MainWindow::on_button_del_clicked()
     }
 }
 
-void MainWindow::on_button_0_clicked()
+void MainWindow::handleDigitButtonClicked()
 {
-    handle_num_buttons('0');
-}
-
-void MainWindow::on_button_1_clicked()
-{
-    handle_num_buttons('1');
-}
-
-void MainWindow::on_button_2_clicked()
-{
-    handle_num_buttons('2');
-}
-
-void MainWindow::on_button_3_clicked()
-{
-    handle_num_buttons('3');
-}
-
-void MainWindow::on_button_4_clicked()
-{
-    handle_num_buttons('4');
-}
-
-void MainWindow::on_button_5_clicked()
-{
-    handle_num_buttons('5');
-}
-
-void MainWindow::on_button_6_clicked()
-{
-    handle_num_buttons('6');
-}
-
-void MainWindow::on_button_7_clicked()
-{
-    handle_num_buttons('7');
-}
-
-void MainWindow::on_button_8_clicked()
-{
-    handle_num_buttons('8');
-}
-
-void MainWindow::on_button_9_clicked()
-{
-    handle_num_buttons('9');
+    auto* b = qobject_cast<QPushButton*>(sender());
+    if (!b) return;
+    const QChar ch = b->text().isEmpty() ? QChar() : b->text().at(0);
+    if (ch.isNull()) return;
+    handle_num_buttons(ch.toLatin1());
 }
 
 void MainWindow::handle_num_buttons(char num)
@@ -706,218 +466,113 @@ void MainWindow::handle_num_buttons(char num)
     }
 }
 
-void MainWindow::check_edit_line_servo_num()
+void MainWindow::on_button_add_step_clicked()
 {
-    int value = ui->lineEdit_servo_num->text().toInt();
-    if ((value < 1) || (value > 6))
+    bool all_ok = true;
+    for (const auto line_edit : m_line_edits)
     {
-        ui->lineEdit_servo_num->clear();
-        ui->lineEdit_servo_num->setStyleSheet(m_line_edit_error_style_sheet);
-        m_is_servo_num_valid = false;
-    }
-    else
-    {
-        ui->lineEdit_servo_num->setStyleSheet(m_line_edit_success_style_sheet);
-        m_is_servo_num_valid = true;
-    }
-}
-
-void MainWindow::check_edit_line_servo_pos()
-{
-    int value = ui->lineEdit_servo_pos->text().toInt();
-    if ((value < 500) || (value > 2500))
-    {
-        ui->lineEdit_servo_pos->clear();
-        ui->lineEdit_servo_pos->setStyleSheet(m_line_edit_error_style_sheet);
-        m_is_servo_pos_valid = false;
-    }
-    else
-    {
-        ui->lineEdit_servo_pos->setStyleSheet(m_line_edit_success_style_sheet);
-        m_is_servo_pos_valid = true;
-    }
-}
-
-void MainWindow::check_edit_line_servo_speed()
-{
-    int value = ui->lineEdit_servo_speed->text().toInt();
-    if ((value < 1) || (value > 10))
-    {
-        ui->lineEdit_servo_speed->clear();
-        ui->lineEdit_servo_speed->setStyleSheet(m_line_edit_error_style_sheet);
-        m_is_servo_speed_valid = false;
-    }
-    else
-    {
-        ui->lineEdit_servo_speed->setStyleSheet(m_line_edit_success_style_sheet);
-        m_is_servo_speed_valid = true;
-    }
-}
-
-void MainWindow::check_edit_line_delay()
-{
-    int value = ui->lineEdit_delay->text().toInt();
-    if ((ui->lineEdit_delay->text() == "") || (value < 0) || (value > 10000))
-    {
-        ui->lineEdit_delay->clear();
-        ui->lineEdit_delay->setStyleSheet(m_line_edit_error_style_sheet);
-        m_is_delay_valid = false;
-    }
-    else
-    {
-        ui->lineEdit_delay->setStyleSheet(m_line_edit_success_style_sheet);
-        m_is_delay_valid = true;
-    }
-}
-
-void MainWindow::on_buton_add_step_clicked()
-{
-    check_edit_line_servo_num();
-    check_edit_line_servo_pos();
-    check_edit_line_servo_speed();
-    check_edit_line_delay();
-
-    if (m_is_servo_num_valid && m_is_servo_pos_valid && m_is_servo_speed_valid && m_is_delay_valid)
-    {
-        // Add code to handle steps limit
-        if (m_automatic_steps_count < 1000)
+        if (!line_edit->hasAcceptableInput())
         {
-            ++m_automatic_steps_count;
-            ui->table_servo_steps->setRowCount(m_automatic_steps_count);
-            QTableWidgetItem * item = new QTableWidgetItem();
-            item->setText(ui->lineEdit_servo_num->text());
-            ui->table_servo_steps->setItem(m_automatic_steps_count-1, 0, item);
-            item = new QTableWidgetItem();
-            item->setText(ui->lineEdit_servo_pos->text());
-            ui->table_servo_steps->setItem(m_automatic_steps_count-1, 1, item);
-            item = new QTableWidgetItem();
-            item->setText(ui->lineEdit_servo_speed->text());
-            ui->table_servo_steps->setItem(m_automatic_steps_count-1, 2, item);
-            item = new QTableWidgetItem();
-            item->setText(ui->lineEdit_delay->text());
-            ui->table_servo_steps->setItem(m_automatic_steps_count-1, 3, item);
-
-            clear_line_edits();
+            line_edit->setStyleSheet(LINE_EDIT_ERROR_STYLE_SHEET);
+            all_ok = false;
+        }
+        else
+        {
+            line_edit->setStyleSheet(LINE_EDIT_SUCCESS_STYLE_SHEET);
         }
     }
+
+    if (!all_ok) return;
+
+    OdinServoStep s;
+    s.step_num = (uint64_t)m_stepsModel->rowCount();
+    s.servo_num = ui->lineEdit_servo_num->text().toInt();
+    s.position  = ui->lineEdit_servo_pos->text().toInt();
+    s.speed     = ui->lineEdit_servo_speed->text().toInt();
+    s.delay     = ui->lineEdit_delay->text().toInt();
+
+    m_stepsModel->addStep(s);
+    m_automatic_steps->push_back(s);
+    clear_line_edits();
+
+    for (auto s = m_automatic_steps->begin(); s != m_automatic_steps->end(); ++s)
+    {
+        std::cout << +s->step_num << std::endl;
+        std::cout << +s->servo_num << std::endl;
+        std::cout << +s->position << std::endl;
+        std::cout << +s->speed << std::endl;
+        std::cout << +s->delay << std::endl;
+    }
+    std::cout << "---" << std::endl;
 }
 
 void MainWindow::clear_line_edits()
 {
-    ui->lineEdit_servo_num->clear();
-    ui->lineEdit_servo_num->setStyleSheet("");
-    ui->lineEdit_servo_pos->clear();
-    ui->lineEdit_servo_pos->setStyleSheet("");
-    ui->lineEdit_servo_speed->clear();
-    ui->lineEdit_servo_speed->setStyleSheet("");
-    ui->lineEdit_delay->clear();
-    ui->lineEdit_delay->setStyleSheet("");
-}
-
-void MainWindow::on_button_remove_step_clicked()
-{
-    if (ui->lineEdit_step_number->text() != "")
+    for (const auto line_edit : m_line_edits)
     {
-        int row = ui->lineEdit_step_number->text().toInt()-1;
-        if (row >= 0 && row < ui->table_servo_steps->rowCount())
-        {
-            --m_automatic_steps_count;
-            ui->table_servo_steps->removeRow(row);
-            ui->lineEdit_step_number->clear();
-        }
+        line_edit->clear();
+        line_edit->setStyleSheet("");
     }
 }
 
-void MainWindow::on_button_save_clicked()
-{
-    try
+void MainWindow::on_button_remove_step_clicked() {
+    const int row = ui->lineEdit_step_number->text().toInt() - 1;
+    if (row >= 0 && row < m_stepsModel->rowCount())
     {
-        if(!std::filesystem::exists(m_scripted_motion_files_path))
-        {
+        m_stepsModel->removeRowAt(row);
+        if (row < (int)m_automatic_steps->size())
+            m_automatic_steps->erase(m_automatic_steps->begin() + row);
+        ui->lineEdit_step_number->clear();
+    }
+}
+
+void MainWindow::on_button_table_clear_clicked() {
+    m_stepsModel->clear();
+    m_automatic_steps->clear();
+}
+
+void MainWindow::on_button_save_clicked() {
+    try {
+        if (!std::filesystem::exists(m_scripted_motion_files_path))
             std::filesystem::create_directories(m_scripted_motion_files_path);
-        }
 
         const std::string file_name = ui->lineEdit_file_name->text().toStdString();
+        if (file_name.empty()) return;
 
-        std::filesystem::path file_path = m_scripted_motion_files_path / file_name;
-        std::ofstream file(file_path.string());
-
-        for (int i = 0; i < ui->table_servo_steps->rowCount(); ++i)
-        {
-            for (int j = 0; j < ui->table_servo_steps->columnCount(); ++j)
-            {
-                file << ui->table_servo_steps->item(i, j)->text().toStdString() << "\n";
-            }
+        std::ofstream file((m_scripted_motion_files_path / file_name).string());
+        for (const auto& s : *m_automatic_steps) {
+            file << s.servo_num << "\n"
+                 << s.position  << "\n"
+                 << s.speed     << "\n"
+                 << s.delay     << "\n";
         }
-
         ui->lineEdit_file_name->clear();
         scan_automatic_files();
-        file.close();
-    }
-    catch (const std::exception & error)
-    {
-        std::cout << error.what() << std::endl;
-    }
+    } catch (const std::exception& e) { std::cout << e.what() << std::endl; }
 }
 
-void MainWindow::on_button_load_clicked()
-{
-    try
-    {
-        (*m_automatic_steps).clear();
-        if(std::filesystem::exists(m_scripted_motion_files_path))
-        {
-            m_automatic_steps_count = 0;
-            ui->table_servo_steps->setRowCount(m_automatic_steps_count);
-            const std::string file_name = ui->list_automatic_files->currentItem()->text().toStdString();
+void MainWindow::on_button_load_clicked() {
+    try {
+        m_stepsModel->clear();
+        m_automatic_steps->clear();
 
-            std::cout << file_name << std::endl;
+        if (!std::filesystem::exists(m_scripted_motion_files_path)) return;
 
-            std::filesystem::path file_path = m_scripted_motion_files_path / file_name;
-            std::ifstream file(file_path.string());
+        const auto* item = ui->list_automatic_files->currentItem();
+        if (!item) return;
 
-            std::string data;
-
-            bool fill_step_table = true;
-            while(fill_step_table)
-            {
-                ++m_automatic_steps_count;
-                for (int i = 0; i < ui->table_servo_steps->columnCount(); ++i)
-                {
-                    file >> data;
-                    if (file.eof())
-                    {
-                        fill_step_table = false;
-                        --m_automatic_steps_count;
-                        break;
-                    }
-                    else
-                    {
-                        ui->table_servo_steps->setRowCount(m_automatic_steps_count);
-                        QTableWidgetItem * item = new QTableWidgetItem;
-                        item->setText(QString::fromStdString(data));
-                        ui->table_servo_steps->setItem(m_automatic_steps_count-1, i, item);
-                    }
-                    // Build OdinServoStep and add to steps vector
-                    if (i == ui->table_servo_steps->columnCount()-1)
-                    {
-                        OdinServoStep servo_step;
-                        servo_step.step_num  = m_automatic_steps_count-1;
-                        servo_step.servo_num = ui->table_servo_steps->item(m_automatic_steps_count-1, 0)->text().toInt();
-                        servo_step.position  = ui->table_servo_steps->item(m_automatic_steps_count-1, 1)->text().toInt();
-                        servo_step.speed     = ui->table_servo_steps->item(m_automatic_steps_count-1, 2)->text().toInt();
-                        servo_step.delay     = ui->table_servo_steps->item(m_automatic_steps_count-1, 3)->text().toInt();
-                        (*m_automatic_steps).emplace_back(servo_step);
-                    }
-                }
-            }
-            file.close();
+        std::ifstream file((m_scripted_motion_files_path / item->text().toStdString()).string());
+        for (;;) {
+            OdinServoStep s{};
+            if (!(file >> s.servo_num)) break;
+            if (!(file >> s.position))  break;
+            if (!(file >> s.speed))     break;
+            if (!(file >> s.delay))     break;
+            s.step_num = (uint64_t)m_stepsModel->rowCount();
+            m_stepsModel->addStep(s);
+            m_automatic_steps->push_back(s);
         }
-    }
-    catch (const std::exception & error)
-    {
-        std::cout << error.what() << std::endl;
-    }
+    } catch (const std::exception& e) { std::cout << e.what() << std::endl; }
 }
 
 void MainWindow::scan_automatic_files()
@@ -937,6 +592,12 @@ void MainWindow::scan_automatic_files()
     {
         std::cout << error.what() << std::endl;
     }
+}
+
+void MainWindow::onRadioGroupToggled(int id, bool checked)
+{
+    if (!checked) return;
+    m_automatic_line_edit_select = static_cast<std::uint8_t>(id);
 }
 
 void MainWindow::on_radioButton_loop_toggled(bool checked)
@@ -959,127 +620,84 @@ void MainWindow::on_button_execute_clicked()
 
 void MainWindow::handleMotionCompleted()
 {
-    std::cout << "MOTION COMPLETED!" << std::endl;
+    std::cout << "[OdinGui] Motion request completed." << std::endl;
     *m_scripted_motion_request_status = static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::IDLE);
     ui->button_execute->setEnabled(true);
 }
 
-void MainWindow::on_button_table_clear_clicked()
-{
-    m_automatic_steps_count = 0;
-    ui->table_servo_steps->setRowCount(m_automatic_steps_count);
-}
-
 void MainWindow::onFrame(const QImage& img)
 {
+    if (m_uiTimer.elapsed() < m_uiMinIntervalMs) return;
+    m_uiTimer.restart();
+
     if (img.isNull()) return;
-    m_lastFrame = img;
 
-    QImage withBox = drawMotionBox(img);
+    // display clean frame immediately
+    QImage frame = (img.format() == QImage::Format_RGB888)
+                     ? img
+                     : img.convertToFormat(QImage::Format_RGB888);
 
-    const QPixmap pm = QPixmap::fromImage(withBox).scaled(
+    // paint last known bbox
+    if (m_haveFaceQt)
+    {
+        QPainter p(&frame);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        QPen pen(QColor(0, 200, 0)); pen.setWidth(3);
+        p.setPen(pen);
+        p.drawRect(m_lastFaceQt);
+    }
+
+    // async detection, only when worker is free
+    if (m_CvWorker && !m_faceBusy)
+    {
+        m_faceBusy = true;
+        const bool forceFull = (m_fullDetectTimer.elapsed() >= m_fullDetectMs) || !m_haveFaceQt;
+        if (forceFull) m_fullDetectTimer.restart();
+
+        // process in worker thread
+        QMetaObject::invokeMethod(m_CvWorker, "process",
+                                  Qt::QueuedConnection,
+                                  Q_ARG(QImage, img),
+                                  Q_ARG(bool, forceFull));
+    }
+
+    // send to label
+    const QPixmap pm = QPixmap::fromImage(frame).scaled(
         ui->camera_label->size(),
         Qt::KeepAspectRatio,
-        Qt::SmoothTransformation
-    );
+        Qt::FastTransformation);
     ui->camera_label->setPixmap(pm);
 }
 
-cv::Mat MainWindow::qimageToMatRGB(const QImage& img)
+bool MainWindow::loadFaceCascadeFromResource()
 {
+    const QString tmp = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
+                        + "/haarcascade_frontalface_default.xml";
+    m_cascade_tmp_path = tmp.toStdString();
 
-    QImage rgb = img.format() == QImage::Format_RGB888 ? img
-                                                       : img.convertToFormat(QImage::Format_RGB888);
-    return cv::Mat(rgb.height(), rgb.width(), CV_8UC3,
-                   const_cast<uchar*>(rgb.bits()), rgb.bytesPerLine()).clone();
-}
-
-QImage MainWindow::matToQImageRGB(const cv::Mat& m)
-{
-    CV_Assert(m.type() == CV_8UC3);
-    QImage img(m.data, m.cols, m.rows, m.step, QImage::Format_RGB888);
-    return img.copy();
-}
-
-QImage MainWindow::drawMotionBox(const QImage& src)
-{
-    // 1) Konwersja do cv::Mat (RGB)
-    cv::Mat frameRGB = qimageToMatRGB(src);
-
-    // (opcjonalnie) zmniejsz na szybkie przetwarzanie:
-    cv::Mat procRGB;
-    cv::resize(frameRGB, procRGB, cv::Size(), 0.75, 0.75, cv::INTER_AREA);
-
-    // 2) Gray + blur
-    cv::Mat gray, grayBlur;
-    cv::cvtColor(procRGB, gray, cv::COLOR_RGB2GRAY);
-    cv::GaussianBlur(gray, grayBlur, cv::Size(5,5), 0);
-
-    // 3) Jeśli nie mamy poprzedniej – zapisz i zwróć (bez ramki)
-    if (!m_havePrev) {
-        m_prevGray = grayBlur.clone();
-        m_havePrev = true;
-        return src;
+    QFile f(":/data/haarcascade_frontalface_default.xml");
+    if (!f.open(QIODevice::ReadOnly)) {
+        qWarning() << "[GUI] No cascade in resources (:/data/haarcascade_frontalface_default.xml)";
+        return false;
     }
+    const QByteArray xml = f.readAll();
+    f.close();
 
-    // co którąś klatkę (jeśli chcesz odciążyć CPU)
-    m_frameCount++;
-    if (m_frameCount % m_processEveryN != 0) {
-        return src;
+    std::ofstream ofs(m_cascade_tmp_path, std::ios::binary | std::ios::trunc);
+    if (!ofs) {
+        qWarning() << "[GUI] Tmp cascade write failed:" << tmp;
+        return false;
     }
+    ofs.write(xml.constData(), static_cast<std::streamsize>(xml.size()));
+    ofs.close();
 
-    // 4) Różnica |prev - curr| → prog → morfologia
-    cv::Mat diff, thresh;
-    cv::absdiff(m_prevGray, grayBlur, diff);
-    cv::threshold(diff, thresh, 8, 255, cv::THRESH_BINARY); // próg czułości ruchu
-    cv::morphologyEx(thresh, thresh, cv::MORPH_OPEN,
-                     cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3)));
-    cv::dilate(thresh, thresh, cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5,5)), 
-               cv::Point(-1,-1), 1);
-
-    // 5) Kontury → największy obszar
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(thresh, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-    cv::Rect bestBox;
-    int bestArea = 0;
-    for (const auto& c : contours) {
-        cv::Rect r = cv::boundingRect(c);
-        int area = r.area();
-        if (area > m_minArea && area > bestArea) {
-            bestArea = area;
-            bestBox = r;
-        }
+    // sanity check
+    if (!std::filesystem::exists(m_cascade_tmp_path) ||
+        std::filesystem::file_size(m_cascade_tmp_path) == 0) {
+        qWarning() << "[GUI] Cascade file missing/empty:" << tmp;
+        return false;
     }
-
-    // 6) Aktualizuj poprzednią klatkę (powoli doganiaj tło – mniej “ghostingu”)
-    // możesz też zastosować running average; tu po prostu podmieniamy:
-    m_prevGray = grayBlur.clone();
-
-    // 7) Jeśli coś znaleziono — przeskaluj bbox do rozmiaru oryginalnego i narysuj
-    if (bestArea > 0) {
-        // skalowanie współrzędnych, bo przetwarzaliśmy obraz zmniejszony
-        double sx = static_cast<double>(frameRGB.cols) / procRGB.cols;
-        double sy = static_cast<double>(frameRGB.rows) / procRGB.rows;
-        cv::Rect boxScaled(
-            static_cast<int>(bestBox.x * sx),
-            static_cast<int>(bestBox.y * sy),
-            static_cast<int>(bestBox.width * sx),
-            static_cast<int>(bestBox.height * sy)
-        );
-
-        // rysuj w obrazie RGB (cv) i wróć do QImage
-        cv::rectangle(frameRGB, boxScaled, cv::Scalar(255, 0, 0), 2, cv::LINE_AA);
-        return matToQImageRGB(frameRGB);
-    }
-
-    // Brak ruchu → zwróć oryginał
-    return src;
-}
-
-void MainWindow::onFatal(const QString& msg)
-{
-    QMessageBox::critical(this, "Camera error", msg);
+    return true;
 }
 
 void MainWindow::on_button_stop_clicked()

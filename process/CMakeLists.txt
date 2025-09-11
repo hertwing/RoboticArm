@@ -1,6 +1,7 @@
 add_subdirectory(joypad_manager)
 add_subdirectory(gui)
 add_subdirectory(diagnostic_manager)
+add_subdirectory(video_transfer_manager)
 
 if (BUILD_ARM)
     add_subdirectory(servo_manager)

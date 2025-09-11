@@ -13,24 +13,33 @@ set(QT_DEBUG_FIND_PACKAGE ON)
 
 find_package(QT NAMES Qt6 REQUIRED COMPONENTS Widgets Charts)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Charts)
-find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc objdetect)
 
-set(PROJECT_SOURCES
+set(HEADERS
+    mainwindow.h
+    public/ChartsPanel.h
+    public/CvWorker.h
+    public/OdinStepsModel.h
+    public/ScriptedMotionWorker.h
+    public/UdpMjpegReceiver.h
+    )
+
+set(SOURCES
     main.cpp
     mainwindow.cpp
-    mainwindow.h
     mainwindow.ui
-    public/ScriptedMotionWorker.h
-    public/v4l2capture.h
+    private/ChartsPanel.cpp
+    private/CvWorker.cpp
+    private/OdinStepsModel.cpp
     private/ScriptedMotionWorker.cpp
-    private/v4l2capture.cpp
+    private/UdpMjpegReceiver.cpp
 )
-
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(${PROJECT_NAME}
         MANUAL_FINALIZATION
-        ${PROJECT_SOURCES}
+        ${HEADERS}
+        ${SOURCES}
         resources.qrc
     )
 # Define target properties for Android with Qt 6 as:
@@ -40,13 +49,15 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
 else()
     if(ANDROID)
         add_library(${PROJECT_NAME} SHARED
-            ${PROJECT_SOURCES}
+            ${HEADERS}
+            ${SOURCES}
         )
 # Define properties for Android with Qt 5 after find_package() calls as:
 #    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
     else()
         add_executable(${PROJECT_NAME}
-            ${PROJECT_SOURCES}
+            ${HEADERS}
+            ${SOURCES}
         )
     endif()
 endif()
@@ -61,7 +72,9 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE Qt${QT_VERSION_MAJOR}::Charts
     PRIVATE library_shmem_handler
     PRIVATE library_diagnostic_handler
-    PRIVATE library_inet_comm_handler
+    PRIVATE library_tcp_handler
+    PRIVATE library_udp_handler
+    PRIVATE library_video_handler
     PRIVATE stdc++fs
     PRIVATE ${OpenCV_LIBS})
 

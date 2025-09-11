@@ -84,12 +84,14 @@ void ServoController::setStartupPosition()
 
 void ServoController::setAbsolutePosition(uint16_t position, uint8_t servo_num, uint8_t step /*=1*/)
 {
+    std::uint16_t current_position = m_current_position[servo_num];
+    if (servo_num >= SERVO_NUM || current_position < MIN_POS_VAL || current_position > MAX_POS_VAL)
+    {
+        return;
+    }
     std::cout << "Moving servo number: " << +servo_num
               << " to position: " << position
               << ". Step: " << +step << "." << std::endl;
-
-    std::uint16_t current_position = m_current_position[servo_num];
-
     while (current_position != position)
     {
         if (current_position < position) {
@@ -109,6 +111,8 @@ void ServoController::setAbsolutePosition(uint16_t position, uint8_t servo_num, 
 
             if (step < 3) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            } else if (step < 6 && step >= 3) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(7));
             } else {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }

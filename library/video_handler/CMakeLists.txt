@@ -1,12 +1,11 @@
-project(diagnostic_handler)
+project(video_handler)
 
 set(HEADERS
-    public/odin/diagnostic_handler/DiagnosticHandler.h
-    public/odin/diagnostic_handler/DataTypes.h
+    public/odin/video_handler/VideoHandler.h
     )
 
 set(SOURCES
-    private/DiagnosticHandler.cpp
+    private/VideoHandler.cpp
     )
 
 add_library(library_${PROJECT_NAME}
@@ -19,6 +18,6 @@ target_include_directories(library_${PROJECT_NAME}
     )
 
 target_link_libraries(library_${PROJECT_NAME}
-    PUBLIC library_shmem_handler
-    PUBLIC library_tcp_handler
+    PUBLIC library_udp_handler
+    PUBLIC stdc++fs
     )

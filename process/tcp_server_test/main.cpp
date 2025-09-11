@@ -1,4 +1,4 @@
-#include "InetCommHandler.hpp"
+#include "TcpHandler.hpp"
 #include "InetCommData.h"
 #include "odin/diagnostic_handler/DataTypes.h"
 
@@ -13,8 +13,8 @@
 int main()
 {
     signal(SIGPIPE, SIG_IGN);
-    InetCommHandler<odin::diagnostic_handler::DiagnosticData> inet_comm_handler(sizeof(odin::diagnostic_handler::DiagnosticData), 7073);
-    // InetCommHandler<char> inet_comm_handler(MAX_BUFF);
+    TcpHandler<odin::diagnostic_handler::DiagnosticData> inet_comm_handler(sizeof(odin::diagnostic_handler::DiagnosticData), 7073);
+    // TcpHandler<char> inet_comm_handler(MAX_BUFF);
 
     odin::diagnostic_handler::DiagnosticData dd_send;
     odin::diagnostic_handler::DiagnosticData dd_rec;

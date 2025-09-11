@@ -10,4 +10,8 @@
         <file>resources/genesis_joypad_described_alpha.png</file>
         <file>resources/camera_icon.png</file>
     </qresource>
+    <qresource prefix="/data">
+        <file alias="haarcascade_frontalface_default.xml">resources/data/haarcascade_frontalface_default.xml</file>
+        <file alias="haarcascade_smile.xml">resources/data/haarcascade_smile.xml</file>
+    </qresource>
 </RCC>

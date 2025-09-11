@@ -1,7 +1,7 @@
 #ifndef GUIGATEWAY_H
 #define GUIGATEWAY_H
 
-#include "InetCommHandler.hpp"
+#include "TcpHandler.hpp"
 #include "InetCommData.h"
 #include "odin/shmem_wrapper/ShmemHandler.hpp"
 #include "odin/diagnostic_handler/DataTypes.h"
@@ -39,17 +39,17 @@ public:
     static bool m_run_process;
     static void signalCallbackHandler(int signum);
 private:
-    std::unique_ptr<InetCommHandler<DiagnosticData>> m_diagnostic_comm_handler;
+    std::unique_ptr<TcpHandler<DiagnosticData>> m_diagnostic_comm_handler;
     std::unique_ptr<ShmemHandler<DiagnosticData>> m_diagnostic_shmem_handler;
 
-    std::unique_ptr<InetCommHandler<OdinControlSelection>> m_control_selection_comm_handler;
+    std::unique_ptr<TcpHandler<OdinControlSelection>> m_control_selection_comm_handler;
     std::unique_ptr<ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
 
-    std::unique_ptr<InetCommHandler<ScriptedMotionStepData>> m_scripted_motion_request_inet_handler;
+    std::unique_ptr<TcpHandler<ScriptedMotionStepData>> m_scripted_motion_request_inet_handler;
     std::unique_ptr<ShmemHandler<ScriptedMotionStepData>> m_scripted_motion_request_shmem_status;
     std::unique_ptr<ShmemHandler<ScriptedMotionStepData>> m_scripted_motion_reply_shmem_status;
 
-    std::unique_ptr<InetCommHandler<OdinServoStep>> m_scripted_motion_step_inet_handler;
+    std::unique_ptr<TcpHandler<OdinServoStep>> m_scripted_motion_step_inet_handler;
     std::unique_ptr<ShmemHandler<OdinServoStep>> m_scripted_motion_step_shmem_handler;
 
     DiagnosticData m_remote_diagnostic;

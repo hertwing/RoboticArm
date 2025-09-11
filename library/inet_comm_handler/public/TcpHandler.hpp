@@ -20,12 +20,12 @@
 #include <chrono>
 
 template <typename T>
-class InetCommHandler
+class TcpHandler
 {
 public:
-    InetCommHandler(std::uint64_t buffer_size, const std::uint16_t & port);
-    InetCommHandler(std::uint64_t buffer_size, const std::uint16_t & port, const std::string & server_ip);
-    ~InetCommHandler();
+    TcpHandler(std::uint64_t buffer_size, const std::uint16_t & port);
+    TcpHandler(std::uint64_t buffer_size, const std::uint16_t & port, const std::string & server_ip);
+    ~TcpHandler();
 
     std::int8_t createTcpServer();
     std::int8_t acceptClient();
@@ -62,7 +62,6 @@ private:
     struct sockaddr_in m_servaddr;
     struct sockaddr_in m_cli;
 
-    fd_set m_read_set;
     int m_server_activity;
     struct timeval m_read_timeout;
 
@@ -70,10 +69,10 @@ private:
 };
 
 template <typename T>
-bool InetCommHandler<T>::m_run_process = true;
+bool TcpHandler<T>::m_run_process = true;
 
 template <typename T>
-InetCommHandler<T>::InetCommHandler(std::uint64_t buffer_size, const std::uint16_t & port) :
+TcpHandler<T>::TcpHandler(std::uint64_t buffer_size, const std::uint16_t & port) :
     m_buffer_size(buffer_size),
     m_sockfd(-1),
     m_connfd(-1),
@@ -82,7 +81,6 @@ InetCommHandler<T>::InetCommHandler(std::uint64_t buffer_size, const std::uint16
     m_len(0),
     m_servaddr{},
     m_cli{},
-    m_read_set{},
     m_server_activity(0),
     m_read_timeout{0,0}
 {
@@ -97,7 +95,7 @@ InetCommHandler<T>::InetCommHandler(std::uint64_t buffer_size, const std::uint16
 };
 
 template <typename T>
-InetCommHandler<T>::InetCommHandler(std::uint64_t buffer_size, const std::uint16_t & port, const std::string & server_ip) :
+TcpHandler<T>::TcpHandler(std::uint64_t buffer_size, const std::uint16_t & port, const std::string & server_ip) :
     m_buffer_size(buffer_size),
     m_port(port),
     m_server_ip(server_ip)
@@ -109,7 +107,7 @@ InetCommHandler<T>::InetCommHandler(std::uint64_t buffer_size, const std::uint16
 };
 
 template <typename T>
-InetCommHandler<T>::~InetCommHandler()
+TcpHandler<T>::~TcpHandler()
 {
     if (m_sockfd >= 0) close(m_sockfd);
     if (m_connfd >= 0) close(m_connfd);
@@ -118,7 +116,7 @@ InetCommHandler<T>::~InetCommHandler()
 }
 
 template <typename T>
-std::int8_t InetCommHandler<T>::createTcpServer()
+std::int8_t TcpHandler<T>::createTcpServer()
 {
     if (!handleConnection())
     {
@@ -204,7 +202,7 @@ std::int8_t InetCommHandler<T>::createTcpServer()
 }
 
 template <typename T>
-std::int8_t InetCommHandler<T>::acceptClient()
+std::int8_t TcpHandler<T>::acceptClient()
 {
     if (!handleConnection())
     {
@@ -255,7 +253,7 @@ std::int8_t InetCommHandler<T>::acceptClient()
 }
 
 template <typename T>
-std::int8_t InetCommHandler<T>::createTcpClientSocket()
+std::int8_t TcpHandler<T>::createTcpClientSocket()
 {
     if (!handleConnection())
     {
@@ -310,7 +308,7 @@ std::int8_t InetCommHandler<T>::createTcpClientSocket()
 }
 
 template <typename T>
-std::int8_t InetCommHandler<T>::serverRead(T * buff)
+std::int8_t TcpHandler<T>::serverRead(T * buff)
 {
     if (!handleConnection())
     {
@@ -326,7 +324,7 @@ std::int8_t InetCommHandler<T>::serverRead(T * buff)
 }
 
 template <typename T>
-bool InetCommHandler<T>::serverWrite(const T * buff)
+bool TcpHandler<T>::serverWrite(const T * buff)
 {
     if (!handleConnection())
     {
@@ -341,7 +339,7 @@ bool InetCommHandler<T>::serverWrite(const T * buff)
 }
 
 template <typename T>
-std::int8_t InetCommHandler<T>::clientRead(T * buff)
+std::int8_t TcpHandler<T>::clientRead(T * buff)
 {
     if (!handleConnection())
     {
@@ -357,7 +355,7 @@ std::int8_t InetCommHandler<T>::clientRead(T * buff)
 }
 
 template <typename T>
-bool InetCommHandler<T>::clientWrite(const T * buff)
+bool TcpHandler<T>::clientWrite(const T * buff)
 {
     if (!handleConnection())
     {
@@ -372,7 +370,7 @@ bool InetCommHandler<T>::clientWrite(const T * buff)
 }
 
 template <typename T>
-bool InetCommHandler<T>::handleConnection()
+bool TcpHandler<T>::handleConnection()
 {
     if (!m_run_process)
     {
@@ -394,7 +392,7 @@ bool InetCommHandler<T>::handleConnection()
 }
 
 template <typename T>
-void InetCommHandler<T>::disconnectAndWaitForNewClient()
+void TcpHandler<T>::disconnectAndWaitForNewClient()
 {
     if (m_connfd >= 0) { shutdown(m_connfd, SHUT_RDWR); close(m_connfd); }
     m_connfd = -1;
@@ -405,7 +403,7 @@ void InetCommHandler<T>::disconnectAndWaitForNewClient()
 }
 
 template <typename T>
-void InetCommHandler<T>::reconnectToServer()
+void TcpHandler<T>::reconnectToServer()
 {
     std::cout << "[client] RECONNECTING TO SERVER..." << std::endl;
     if (m_sockfd >= 0) { shutdown(m_sockfd, SHUT_RDWR); close(m_sockfd); }
@@ -417,14 +415,14 @@ void InetCommHandler<T>::reconnectToServer()
 }
 
 template <typename T>
-void InetCommHandler<T>::signalCallbackHandler(int signum)
+void TcpHandler<T>::signalCallbackHandler(int signum)
 {
-    std::cout << "InetCommHandler received signal: " << signum << std::endl;
+    std::cout << "TcpHandler received signal: " << signum << std::endl;
     m_run_process = false;
 }
 
 template <typename T>
-int InetCommHandler<T>::select_with_deadline(int fd, bool want_read, bool want_write, int timeout_us) const
+int TcpHandler<T>::select_with_deadline(int fd, bool want_read, bool want_write, int timeout_us) const
 {
     using clock = std::chrono::steady_clock;
     const auto deadline = clock::now() + std::chrono::microseconds(timeout_us);
@@ -448,7 +446,7 @@ int InetCommHandler<T>::select_with_deadline(int fd, bool want_read, bool want_w
 }
 
 template <typename T>
-bool InetCommHandler<T>::read_exact(int fd, void* buf, size_t len, int timeout_us)
+bool TcpHandler<T>::read_exact(int fd, void* buf, size_t len, int timeout_us)
 {
     auto* p = static_cast<char*>(buf);
     size_t got = 0;
@@ -471,7 +469,7 @@ bool InetCommHandler<T>::read_exact(int fd, void* buf, size_t len, int timeout_u
 }
 
 template <typename T>
-bool InetCommHandler<T>::write_exact(int fd, const void* buf, size_t len, int timeout_us)
+bool TcpHandler<T>::write_exact(int fd, const void* buf, size_t len, int timeout_us)
 {
     auto* p = static_cast<const char*>(buf);
     size_t sent_total = 0;
@@ -493,7 +491,7 @@ bool InetCommHandler<T>::write_exact(int fd, const void* buf, size_t len, int ti
 }
 
 template <typename T>
-void InetCommHandler<T>::enable_tcp_options(int fd)
+void TcpHandler<T>::enable_tcp_options(int fd)
 {
     // KEEPALIVE
     int ka = 1;

@@ -63,7 +63,7 @@ void ScriptedMotionWorker::processMotion()
                 std::cout << "Start req" << std::endl;
                 // TODO: Write error handlers
                 m_scripted_motion_reply_shmem_handler->shmemRead(&rep_data);
-                std::cout << rep_data.step_num << " " << static_cast<std::uint64_t>(rep_data.step_status) << std::endl;
+                std::cout << "Step num: " << rep_data.step_num << " Status: " << static_cast<std::uint64_t>(rep_data.step_status) << std::endl;
                 if (rep_data.step_status == ScriptedMotionStatus::IDLE)
                 {
                     std::cout << "Phase::HandleReq" << std::endl;
@@ -80,6 +80,12 @@ void ScriptedMotionWorker::processMotion()
                 if (m_current_step_index < m_automatic_steps->size())
                 {
                     m_scripted_motion_step_shmem_handler->shmemWrite(&(m_automatic_steps->at(m_current_step_index)));
+                    auto s = m_automatic_steps->at(m_current_step_index);
+                    std::cout << +s.step_num << std::endl;
+                    std::cout << +s.servo_num << std::endl;
+                    std::cout << +s.position << std::endl;
+                    std::cout << +s.speed << std::endl;
+                    std::cout << +s.delay << std::endl;
                     phase = Phase::WaitStepCompleted;
                 }
                 else
@@ -131,5 +137,4 @@ void ScriptedMotionWorker::stopMotion()
     m_current_step_index = 0;
     ScriptedMotionStepData req_data{m_current_step_index, ScriptedMotionStatus::IDLE};
     m_scripted_motion_request_shmem_handler->shmemWrite(&req_data);
-    // Write STOP to shmem
 }

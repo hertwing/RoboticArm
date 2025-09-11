@@ -308,7 +308,6 @@ void ServoManager::handleAutomaticData()
     bool stop_requested = false;
     enum class Phase { Idle, StartReq, HandleReq, WaitStepCompleted, EndReq, StopReq };
     Phase phase = Phase::Idle;
-    // Save current step index for GUI table
     std::uint64_t current_step_index = 0;
 
     auto req_status = ScriptedMotionStatus::IDLE;
@@ -341,25 +340,23 @@ void ServoManager::handleAutomaticData()
                 case Phase::HandleReq:
                 {
                     m_scripted_motion_step_shmem_handler->shmemRead(&m_automatic_servo_step);
-                    if (current_step_index == m_automatic_servo_step.step_num)
-                    {
-                        std::cout << "Reading step." << std::endl;
-                        std::cout << m_automatic_servo_step.step_num << std::endl;
-                        std::cout << +m_automatic_servo_step.servo_num << std::endl;
-                        std::cout << m_automatic_servo_step.position << std::endl;
-                        std::cout << +m_automatic_servo_step.speed << std::endl;
-                        std::cout << m_automatic_servo_step.delay << std::endl;
+                    std::cout << "Reading step." << std::endl;
+                    std::cout << m_automatic_servo_step.step_num << std::endl;
+                    std::cout << +m_automatic_servo_step.servo_num << std::endl;
+                    std::cout << m_automatic_servo_step.position << std::endl;
+                    std::cout << +m_automatic_servo_step.speed << std::endl;
+                    std::cout << m_automatic_servo_step.delay << std::endl;
+                    std::cout << "---" << std::endl;
 
-                        updateLedColors(LedOption::AUTOAMTIC_EXECUTE);
-                        m_servo_controller.setAbsolutePosition(m_automatic_servo_step.position, m_automatic_servo_step.servo_num-1, m_automatic_servo_step.speed);
-                        std::this_thread::sleep_for(std::chrono::milliseconds(m_automatic_servo_step.delay));
+                    updateLedColors(LedOption::AUTOAMTIC_EXECUTE);
+                    m_servo_controller.setAbsolutePosition(m_automatic_servo_step.position, m_automatic_servo_step.servo_num-1, m_automatic_servo_step.speed);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(m_automatic_servo_step.delay));
 
-                        rep_data.step_num = current_step_index;
-                        rep_data.step_status = ScriptedMotionStatus::REQUEST_COMPLETED;
-                        m_scripted_motion_reply_shmem_handler->shmemWrite(&rep_data);
-                        ++current_step_index;
-                        phase = Phase::Idle;
-                    }
+                    rep_data.step_num = current_step_index;
+                    rep_data.step_status = ScriptedMotionStatus::REQUEST_COMPLETED;
+                    m_scripted_motion_reply_shmem_handler->shmemWrite(&rep_data);
+                    ++current_step_index;
+                    phase = Phase::Idle;
                 }
                 default:
                     break;
@@ -371,63 +368,6 @@ void ServoManager::handleAutomaticData()
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
-
-    // OdinAutomaticExecuteData automatic_execute_data;
-    // if (m_automatic_execute_shmem_handler->openShmem())
-    // {
-    //     m_automatic_execute_shmem_handler->shmemRead(&m_scripted_motion_status);
-    //     if (m_scripted_motion_status == AutomaticMovementStatus::START_SENDING)
-    //     {
-    //         m_automatic_movement_done = false;
-    //         updateLedColors(LedOption::AUTOAMTIC_EXECUTE);
-    //         if (m_automatic_step_shmem_handler->openShmem())
-    //         {
-    //             if (m_automatic_step_shmem_handler->shmemRead(&m_automatic_servo_step))
-    //             {
-    //                 std::cout << "Reading step." << std::endl;
-
-    //                 std::cout << m_automatic_servo_step.step_num << std::endl;
-    //                 std::cout << +m_automatic_servo_step.servo_num << std::endl;
-    //                 std::cout << m_automatic_servo_step.position << std::endl;
-    //                 std::cout << +m_automatic_servo_step.speed << std::endl;
-    //                 std::cout << m_automatic_servo_step.delay << std::endl;
-    //                 // m_automatic_steps.emplace_back(servo_step);
-
-    //                 m_servo_controller.setAbsolutePosition(m_automatic_servo_step.position, m_automatic_servo_step.servo_num-1, m_automatic_servo_step.speed);
-    //                 std::this_thread::sleep_for(std::chrono::milliseconds(m_automatic_servo_step.delay));
-
-    //                 m_scripted_motion_status = AutomaticMovementStatus::RECEIVE_SUCCESS;
-    //                 m_automatic_execute_shmem_handler->shmemWrite(&m_scripted_motion_status);
-    //             }
-    //             else
-    //             {
-    //                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    //             }
-    //         }
-    //     }
-    //     else if (m_scripted_motion_status == AutomaticMovementStatus::SEND_DONE && !m_automatic_movement_done)
-    //     {
-    //         updateLedColors(LedOption::AUTOMATIC_READY);
-    //         m_automatic_movement_done = true;
-    //         m_scripted_motion_status = AutomaticMovementStatus::RECEIVE_DONE;
-    //         m_automatic_execute_shmem_handler->shmemWrite(&m_scripted_motion_status);
-    //     }
-    // }
-
-    // if (m_automatic_steps.size())
-    // {
-    //     updateLedColors(LedOption::AUTOAMTIC_EXECUTE);
-    //     for (int i = 0; i < m_automatic_steps.size(); ++i)
-    //     {
-    //         m_servo_controller.setAbsolutePosition(m_automatic_steps.at(i).position, m_automatic_steps.at(i).servo_num-1, m_automatic_steps.at(i).speed);
-    //         std::this_thread::sleep_for(std::chrono::milliseconds(m_automatic_steps.at(i).delay));
-    //     }
-    //     updateLedColors(LedOption::AUTOMATIC_READY);
-    // }
-    // if (automatic_execute_data.run_in_loop == false)
-    // {
-    //     m_automatic_steps.clear();
-    // }
 }
 
 void ServoManager::runProcess()

@@ -74,7 +74,7 @@ void GuiGateway::handleGuiDiagnostic(GuiGateway * gg)
 {
     gg->m_diagnostic_shmem_handler = std::make_unique<ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME, sizeof(DiagnosticData), true);
-    gg->m_diagnostic_comm_handler = std::make_unique<InetCommHandler<DiagnosticData>>(
+    gg->m_diagnostic_comm_handler = std::make_unique<TcpHandler<DiagnosticData>>(
         sizeof(odin::diagnostic_handler::DiagnosticData), DIAGNOSTIC_SOCKET_PORT);
     while (gg->m_run_process)
     {
@@ -100,7 +100,7 @@ void GuiGateway::handleGuiControlSelection(GuiGateway * gg)
 {   
     gg->m_control_selection_shmem_handler = std::make_unique<ShmemHandler<OdinControlSelection>>(
         odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), false);
-    gg->m_control_selection_comm_handler = std::make_unique<InetCommHandler<OdinControlSelection>>(
+    gg->m_control_selection_comm_handler = std::make_unique<TcpHandler<OdinControlSelection>>(
         sizeof(OdinControlSelection), CONTROL_SELECTION_PORT);
     while (gg->m_run_process)
     {
@@ -127,9 +127,9 @@ void GuiGateway::handleGuiScriptedMotionRequest(GuiGateway * gg)
     gg->m_scripted_motion_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
         odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_SERVO_STEP_SHMEM_NAME, sizeof(OdinServoStep), false);
 
-    gg->m_scripted_motion_request_inet_handler = std::make_unique<InetCommHandler<ScriptedMotionStepData>>(
+    gg->m_scripted_motion_request_inet_handler = std::make_unique<TcpHandler<ScriptedMotionStepData>>(
         sizeof(ScriptedMotionStepData), SCRIPTED_MOTION_REQUEST_PORT);
-    gg->m_scripted_motion_step_inet_handler = std::make_unique<InetCommHandler<OdinServoStep>>(
+    gg->m_scripted_motion_step_inet_handler = std::make_unique<TcpHandler<OdinServoStep>>(
         sizeof(OdinServoStep), SCRIPTED_MOTION_SERVO_DATA_PORT);
 
     std::uint64_t current_step_index = 0;
@@ -200,25 +200,15 @@ void GuiGateway::handleGuiScriptedMotionRequest(GuiGateway * gg)
                 }
                 case Phase::HandleRequest:
                 {
-                    std::cout << "Handling request data" << std::endl;
+                    std::cout << "Handling request data. Step num: " << current_step_index << std::endl;
                     if (!gg->m_scripted_motion_step_shmem_handler->shmemRead(&servo_step))
                     {
                         std::cout << "[GUI GATEWAY] Error: Couldn't read automated motion request SHMEM." << std::endl;
                         phase = Phase::Idle;
                         break;
                     }
-                    std::cout << +servo_step.step_num << std::endl;
-                    if (servo_step.step_num == current_step_index)
-                    {
-                        gg->m_scripted_motion_step_inet_handler->serverWrite(&servo_step);
-                        phase = Phase::WaitArmComplete;
-                    }
-                    else
-                    {
-                        // TODO handle
-                        std::cout << "[GUI GATEWAY] Error: Servo step mismatch." << std::endl;
-                        phase = Phase::Idle;
-                    }
+                    gg->m_scripted_motion_step_inet_handler->serverWrite(&servo_step);
+                    phase = Phase::WaitArmComplete;
                     break;
                 }
                 case Phase::WaitArmComplete:
@@ -274,7 +264,7 @@ void GuiGateway::handleArmDiagnostic(GuiGateway * gg)
 {
     gg->m_diagnostic_shmem_handler = std::make_unique<ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_SHMEM_NAME, sizeof(DiagnosticData), false);
-    gg->m_diagnostic_comm_handler = std::make_unique<InetCommHandler<DiagnosticData>>(
+    gg->m_diagnostic_comm_handler = std::make_unique<TcpHandler<DiagnosticData>>(
         sizeof(odin::diagnostic_handler::DiagnosticData), DIAGNOSTIC_SOCKET_PORT, ROBOTIC_GUI_IP);
     std::uint8_t failed_send_count = 0;
     while (gg->m_run_process)
@@ -318,7 +308,7 @@ void GuiGateway::handleArmControlSelection(GuiGateway * gg)
 {
     gg->m_control_selection_shmem_handler = std::make_unique<ShmemHandler<OdinControlSelection>>(
         odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), true);
-    gg->m_control_selection_comm_handler = std::make_unique<InetCommHandler<OdinControlSelection>>(
+    gg->m_control_selection_comm_handler = std::make_unique<TcpHandler<OdinControlSelection>>(
         sizeof(OdinControlSelection), CONTROL_SELECTION_PORT, ROBOTIC_GUI_IP);
 
     if(!gg->m_control_selection_shmem_handler->shmemWrite(&(gg->m_control_selection)))
@@ -363,9 +353,9 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
     gg->m_scripted_motion_step_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinServoStep>>(
         odin::shmem_wrapper::DataTypes::SCRIPTED_MOTION_SERVO_STEP_SHMEM_NAME, sizeof(OdinServoStep), true);
 
-    gg->m_scripted_motion_request_inet_handler = std::make_unique<InetCommHandler<ScriptedMotionStepData>>(
+    gg->m_scripted_motion_request_inet_handler = std::make_unique<TcpHandler<ScriptedMotionStepData>>(
         sizeof(ScriptedMotionStepData), SCRIPTED_MOTION_REQUEST_PORT, ROBOTIC_GUI_IP);
-    gg->m_scripted_motion_step_inet_handler = std::make_unique<InetCommHandler<OdinServoStep>>(
+    gg->m_scripted_motion_step_inet_handler = std::make_unique<TcpHandler<OdinServoStep>>(
         sizeof(OdinServoStep), SCRIPTED_MOTION_SERVO_DATA_PORT, ROBOTIC_GUI_IP);
 
     std::uint64_t current_step_index = 0;
@@ -417,7 +407,6 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
                 {
                     req_data.step_num = current_step_index;
                     req_data.step_status = ScriptedMotionStatus::START_REQUEST;
-                    gg->m_scripted_motion_request_shmem_status->shmemWrite(&req_data);
                     phase = Phase::HandleRequest;
                 }
                 else if (gg_req_data.step_status != ScriptedMotionStatus::START_REQUEST)
@@ -431,22 +420,15 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
             }
             case Phase::HandleRequest:
             {
-                std::cout << "Handling request data" << std::endl;
+                std::cout << "Handling request data. Step num: " << current_step_index << std::endl;
                 if (gg->m_scripted_motion_step_inet_handler->clientRead(&servo_step) < 0)
                 {
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
-                if (servo_step.step_num == current_step_index)
-                {
-                    gg->m_scripted_motion_step_shmem_handler->shmemWrite(&servo_step);
-                    phase = Phase::WaitArmComplete;
-                }
-                else
-                {
-                    // TODO handle
-                    std::cout << "[GUI GATEWAY] Error: Servo step mismatch." << std::endl;
-                    phase = Phase::Idle;
-                }
+                // First send step info, then request movement
+                gg->m_scripted_motion_step_shmem_handler->shmemWrite(&servo_step);
+                gg->m_scripted_motion_request_shmem_status->shmemWrite(&req_data);
+                phase = Phase::WaitArmComplete;
                 break;
             }
             case Phase::WaitArmComplete:
@@ -502,8 +484,8 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
 
 void GuiGateway::signalCallbackHandler(int signum)
 {
-    InetCommHandler<DiagnosticData>::signalCallbackHandler(signum);
-    InetCommHandler<OdinControlSelection>::signalCallbackHandler(signum);
+    TcpHandler<DiagnosticData>::signalCallbackHandler(signum);
+    TcpHandler<OdinControlSelection>::signalCallbackHandler(signum);
     ShmemHandler<DiagnosticData>::signalCallbackHandler(signum);
     ShmemHandler<OdinControlSelection>::signalCallbackHandler(signum);
     std::cout << "GuiGateway received signal: " << signum << std::endl;

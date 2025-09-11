@@ -14,3 +14,6 @@ add_subdirectory(process)
 add_subdirectory(startup)
 
 SET(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -lstdc++fscd")
+
+add_compile_options(-Wall -Wextra -Wshadow -Wconversion -Wpedantic
+                    -Werror=unused-variable -Werror=unused-parameter)

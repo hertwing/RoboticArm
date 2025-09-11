@@ -10,7 +10,7 @@ target_include_directories(${PROJECT_NAME}
     )
 
 target_link_libraries(${PROJECT_NAME}
-    PRIVATE library_inet_comm_handler
+    PRIVATE library_tcp_handler
     PRIVATE library_shmem_handler
     PRIVATE library_diagnostic_handler
     PRIVATE pthread

@@ -37,7 +37,7 @@ void DiagnosticManager::runProcess(int argc, char * argv[])
 
 void DiagnosticManager::signalCallbackHandler(int signum)
 {
-    DiagnosticManager::signalCallbackHandler(signum);
+    DiagnosticHandler::signalCallbackHandler(signum);
     std::cout << "DiagnosticManager received signal: " << signum << std::endl;
 
     m_run_process = false;

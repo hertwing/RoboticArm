@@ -96,3 +96,13 @@ cd ..
 # cmake --build . -j
 # cp "$(find . -maxdepth 3 -name libws2811.a | head -n1)" "$HOME/rpi-sysroot/usr/lib/"
 # cp ../ws2811.h ../rpihw.h ../pwm.h  $HOME/rpi-sysroot/usr/include/
+
+### Video handling on RPI arm
+# sudo apt update
+# sudo apt install -y \
+#   gstreamer1.0-tools \
+#   gstreamer1.0-plugins-base \
+#   gstreamer1.0-plugins-good \
+#   gstreamer1.0-plugins-bad \
+#   gstreamer1.0-libav \
+#   libcamera-apps

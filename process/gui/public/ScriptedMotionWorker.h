@@ -21,8 +21,6 @@ public:
     std::uint64_t m_current_step_index = 0;
 signals:
     void motionCompleted();
-    // void motionError();
-    // void motionDisconnected();
 
 public slots:
     void processMotion();
