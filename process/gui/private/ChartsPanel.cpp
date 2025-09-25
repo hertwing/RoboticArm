@@ -1,6 +1,11 @@
 #include "ChartsPanel.h"
 
-static QPen pen2(const QColor& c){ QPen p(c); p.setWidth(2); return p; }
+static QPen pen2(const QColor& c)
+{
+    QPen p(c);
+    p.setWidth(2);
+    return p;
+}
 
 void ChartsPanel::addAxesAndAttach(QChart* chart,
                                    QAbstractSeries* s1,
@@ -8,19 +13,27 @@ void ChartsPanel::addAxesAndAttach(QChart* chart,
                                    QValueAxis*& axX,
                                    QValueAxis*& axY)
 {
-    for (QAbstractAxis* ax : chart->axes()) { chart->removeAxis(ax); delete ax; }
+    for (QAbstractAxis* ax : chart->axes()) 
+    {
+        chart->removeAxis(ax);
+        delete ax;
+    }
     axX = new QValueAxis(); axY = new QValueAxis();
     axX->setRange(0, CHART_BINS-1);
     axX->setLabelFormat("%.0f");
+    axX->setLabelsVisible(false);
     axY->setRange(0, 100);
     axY->setTickCount(6);
     axY->setLabelFormat("%.0f");
-
     chart->addAxis(axX, Qt::AlignBottom);
     chart->addAxis(axY, Qt::AlignLeft);
 
     s1->attachAxis(axX); s1->attachAxis(axY);
-    if (s2) { s2->attachAxis(axX); s2->attachAxis(axY); }
+    if (s2)
+    { 
+        s2->attachAxis(axX);
+        s2->attachAxis(axY); 
+    }
     chart->legend()->setVisible(false);
 }
 
@@ -117,12 +130,23 @@ void ChartsPanel::initLatency(QChartView* view)
 
 void ChartsPanel::forceY()
 {
-    auto force = [&](QChart* c){
-        for (QAbstractAxis* a : c->axes(Qt::Vertical)) {
-            if (auto v = qobject_cast<QValueAxis*>(a)) { v->setRange(0,100); v->setTickCount(6); v->setLabelFormat("%.0f"); }
+    auto force = [&](QChart* c)
+    {
+        for (QAbstractAxis* a : c->axes(Qt::Vertical))
+        {
+            if (auto v = qobject_cast<QValueAxis*>(a)) 
+            { 
+                v->setRange(0,100); 
+                v->setTickCount(6); 
+                v->setLabelFormat("%.0f"); 
+            }
         }
-        for (QAbstractAxis* a : c->axes(Qt::Horizontal)) {
-            if (auto v = qobject_cast<QValueAxis*>(a)) { v->setRange(0,CHART_BINS-1); }
+        for (QAbstractAxis* a : c->axes(Qt::Horizontal))
+        {
+            if (auto v = qobject_cast<QValueAxis*>(a))
+            { 
+                v->setRange(0,CHART_BINS-1);
+            }
         }
     };
     force(m_chart_cpu);
@@ -152,6 +176,10 @@ void ChartsPanel::setSnapshot(const DiagnosticData& d)
     m_lat_ok->setValue(pct);
     m_lat_bad->setValue(100.0 - pct);
     m_lat_ok->setBrush( (pct < 50.0) ? QColor(138,226,52) : QColor(239,41,41) );
+
+    m_chart_cpu->setTitle(QString("CPU: %1%").arg(d.cpu_usage, 0, 'd', 0));
+    m_chart_temp->setTitle(QString("Temp: %1 °C").arg(d.cpu_temp, 0, 'd', 0));
+    m_chart_ram->setTitle(QString("RAM: %1%").arg(d.ram_usage, 0, 'd', 0));
     m_chart_lat->setTitle(QString("Latency: %1 ms").arg(lat, 0, 'f', 2));
 }
 
@@ -171,5 +199,8 @@ void ChartsPanel::push(const DiagnosticData& d)
     m_lat_ok->setValue(pct);
     m_lat_bad->setValue(100.0 - pct);
     m_lat_ok->setBrush( (pct < 50.0) ? QColor(138,226,52) : QColor(239,41,41) );
+    m_chart_cpu->setTitle(QString("CPU: %1%").arg(d.cpu_usage, 0, 'd', 0));
+    m_chart_temp->setTitle(QString("Temp: %1 °C").arg(d.cpu_temp, 0, 'd', 0));
+    m_chart_ram->setTitle(QString("RAM: %1%").arg(d.ram_usage, 0, 'd', 0));
     m_chart_lat->setTitle(QString("Latency: %1 ms").arg(lat, 0, 'f', 2));
 }

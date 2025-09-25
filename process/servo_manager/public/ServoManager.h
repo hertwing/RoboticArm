@@ -67,6 +67,20 @@ private:
 
     // TODO: move those kind of values to some config file
     static constexpr int JOYPAD_CONTROL_DATA_BINS = 7;
+
+    // Automatic Data
+    enum class Phase { Idle, StartReq, HandleReq, WaitStepCompleted, EndReq, StopReq };
+    bool m_stop_requested = false;
+    Phase m_phase = Phase::Idle;
+    std::uint64_t m_current_step_index = 0;
+
+    ScriptedMotionStatus m_req_status = ScriptedMotionStatus::IDLE;
+    ScriptedMotionStatus m_rep_status = ScriptedMotionStatus::IDLE;
+
+    ScriptedMotionStepData m_req_data{m_current_step_index, m_req_status};
+    ScriptedMotionStepData m_rep_data{m_current_step_index, m_rep_status};
+
+    bool m_log_phase = true;
 private:
     void praseJoypadData();
     void handleAutomaticData();

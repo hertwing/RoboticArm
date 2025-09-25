@@ -15,34 +15,40 @@ ServoController::ServoController() : m_current_position{0, 0}
 {
     // Open I2C and set adress to PCA9685
     m_i2c_fd = ::open("/dev/i2c-1", O_RDWR);
-    if (m_i2c_fd < 0) {
+    if (m_i2c_fd < 0)
+    {
         std::cerr << "Error: cannot open /dev/i2c-1\n";
         std::exit(EXIT_FAILURE);
     }
-    if (ioctl(m_i2c_fd, I2C_SLAVE, PCA9685_ADDR) < 0) {
+    if (ioctl(m_i2c_fd, I2C_SLAVE, PCA9685_ADDR) < 0)
+    {
         std::cerr << "Error: cannot set I2C addr 0x40\n";
         std::exit(EXIT_FAILURE);
     }
 
     // Reset and basic config
     // MODE1: Auto Increment on, no SLEEP
-    if (!write8(m_i2c_fd, MODE1, AI)) {
+    if (!write8(m_i2c_fd, MODE1, AI))
+    {
         std::cerr << "Error: write MODE1 failed\n";
         std::exit(EXIT_FAILURE);
     }
-    if (!write8(m_i2c_fd, MODE2, OUTDRV | OCH)) {
+    if (!write8(m_i2c_fd, MODE2, OUTDRV | OCH))
+    {
         std::cerr << "Error: write MODE2 failed\n";
         std::exit(EXIT_FAILURE);
     }
 
     // Set PWM frequency
-    if (!setPWMFreq(m_i2c_fd, HERTZ)) {
+    if (!setPWMFreq(m_i2c_fd, HERTZ))
+    {
         std::cerr << "Error: setPWMFreq failed\n";
         std::exit(EXIT_FAILURE);
     }
 
     // Zero all channels
-    if (!allOff(m_i2c_fd)) {
+    if (!allOff(m_i2c_fd))
+    {
         std::cerr << "Error: allOff failed\n";
         std::exit(EXIT_FAILURE);
     }
@@ -51,7 +57,8 @@ ServoController::ServoController() : m_current_position{0, 0}
 }
 
 ServoController::~ServoController() {
-    if (m_i2c_fd >= 0) {
+    if (m_i2c_fd >= 0)
+    {
         allOff(m_i2c_fd);
         ::close(m_i2c_fd);
     }
@@ -94,9 +101,12 @@ void ServoController::setAbsolutePosition(uint16_t position, uint8_t servo_num, 
               << ". Step: " << +step << "." << std::endl;
     while (current_position != position)
     {
-        if (current_position < position) {
+        if (current_position < position) 
+        {
             current_position = static_cast<uint16_t>(std::min<uint32_t>(position, current_position + step));
-        } else {
+        } 
+        else 
+        {
             current_position = static_cast<uint16_t>(std::max<int>(position, current_position - step));
         }
 
@@ -109,11 +119,16 @@ void ServoController::setAbsolutePosition(uint16_t position, uint8_t servo_num, 
             setTick(m_i2c_fd, servo_num, static_cast<uint16_t>(tick));
             m_current_position[servo_num] = current_position;
 
-            if (step < 3) {
+            if (step < 3)
+            {
                 std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            } else if (step < 6 && step >= 3) {
+            } 
+            else if (step < 6 && step >= 3)
+            {
                 std::this_thread::sleep_for(std::chrono::milliseconds(7));
-            } else {
+            } 
+            else 
+            {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
         }

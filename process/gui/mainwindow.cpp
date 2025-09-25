@@ -83,7 +83,7 @@ MainWindow::MainWindow(QWidget * parent):
 
     QMainWindow::showFullScreen();
 
-    cv::setNumThreads(1);
+    // cv::setNumThreads(1);
     m_uiTimer.start();
     const bool cascadeOk = loadFaceCascadeFromResource();
 
@@ -657,7 +657,7 @@ void MainWindow::onFrame(const QImage& img)
         // process in worker thread
         QMetaObject::invokeMethod(m_CvWorker, "process",
                                   Qt::QueuedConnection,
-                                  Q_ARG(QImage, img),
+                                  Q_ARG(QImage, frame),
                                   Q_ARG(bool, forceFull));
     }
 

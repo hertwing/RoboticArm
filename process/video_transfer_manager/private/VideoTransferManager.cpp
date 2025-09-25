@@ -17,13 +17,21 @@ VideoTransferManager::VideoTransferManager() :
 {
 }
 
-void VideoTransferManager::runProcess() {
+void VideoTransferManager::runProcess() 
+{
     m_video_handler.requestRun(true);
+    auto before = std::chrono::steady_clock::now();
+    auto after = std::chrono::steady_clock::now();
     while (m_run_process) 
     {
         m_video_handler.tick();
+        before = std::chrono::steady_clock::now();
         m_video_handler.run();
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        after = std::chrono::steady_clock::now();
+        if (after - before < std::chrono::milliseconds(1))
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
     }
 }
 

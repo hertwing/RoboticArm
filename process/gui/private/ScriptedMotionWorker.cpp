@@ -61,14 +61,8 @@ void ScriptedMotionWorker::processMotion()
             case Phase::StartReq:
             {
                 std::cout << "Start req" << std::endl;
-                // TODO: Write error handlers
-                m_scripted_motion_reply_shmem_handler->shmemRead(&rep_data);
-                std::cout << "Step num: " << rep_data.step_num << " Status: " << static_cast<std::uint64_t>(rep_data.step_status) << std::endl;
-                if (rep_data.step_status == ScriptedMotionStatus::IDLE)
-                {
-                    std::cout << "Phase::HandleReq" << std::endl;
-                    phase = Phase::HandleReq;
-                }
+                m_current_step_index = 0;
+                phase = Phase::HandleReq;
                 break;
             }
             case Phase::HandleReq:

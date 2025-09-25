@@ -86,6 +86,8 @@ void ServoManager::servoDataReader()
                 }
                 else if (m_control_selection.control_selection == static_cast<std::uint8_t>(ControlSelection::AUTOMATIC))
                 {
+                    m_current_step_index = 0;
+                    m_stop_requested = false;
                     handleAutomaticData();
                 }
                 else
@@ -305,40 +307,49 @@ void ServoManager::updateLedColors(std::uint8_t led_options)
 
 void ServoManager::handleAutomaticData()
 {
-    bool stop_requested = false;
-    enum class Phase { Idle, StartReq, HandleReq, WaitStepCompleted, EndReq, StopReq };
-    Phase phase = Phase::Idle;
-    std::uint64_t current_step_index = 0;
-
-    auto req_status = ScriptedMotionStatus::IDLE;
-    auto rep_status = ScriptedMotionStatus::IDLE;
-
-    ScriptedMotionStepData req_data{current_step_index, req_status};
-    ScriptedMotionStepData rep_data{current_step_index, rep_status};
-
-    while(!stop_requested)
+    while(!m_stop_requested)
     {
         if (m_scripted_motion_request_shmem_handler->openShmem() && m_scripted_motion_reply_shmem_handler->openShmem() && m_scripted_motion_step_shmem_handler->openShmem())
         {
-            switch(phase)
+            switch(m_phase)
             {
                 case Phase::Idle:
                 {
-                    m_scripted_motion_request_shmem_handler->shmemRead(&req_data);
-                    if (req_data.step_num == current_step_index && req_data.step_status == ScriptedMotionStatus::START_REQUEST)
+                    if (m_log_phase)
                     {
-                        std::cout << "Handlig data" << std::endl;
-                        phase = Phase::HandleReq;
+                        std::cout << "IDLE" << std::endl;
+                        m_log_phase = false;
                     }
-                    else if (req_data.step_status != ScriptedMotionStatus::START_REQUEST)
+                    m_scripted_motion_request_shmem_handler->shmemRead(&m_req_data);
+                    if (m_req_data.step_status == ScriptedMotionStatus::START_REQUEST)
+                    {
+                        if (m_req_data.step_num == 0 && m_current_step_index != 0)
+                            m_current_step_index = 0;
+                        if (m_req_data.step_num == m_current_step_index)
+                        {
+                            std::cout << "Handling data" << std::endl;
+                            m_phase = Phase::HandleReq;
+                            m_log_phase = true;
+                        }
+                    }
+                    else
                     {
                         updateLedColors(LedOption::AUTOMATIC_READY);
-                        stop_requested = true;
+                        m_current_step_index = 0;
+                        m_rep_data.step_num = 0;
+                        m_rep_data.step_status = ScriptedMotionStatus::IDLE;
+                        m_scripted_motion_reply_shmem_handler->shmemWrite(&m_rep_data);
+                        m_stop_requested = true;
                     }
                     break;
                 }
                 case Phase::HandleReq:
                 {
+                    if (m_log_phase)
+                    {
+                        std::cout << "HANDLE_REQ" << std::endl;
+                        m_log_phase = false;
+                    }
                     m_scripted_motion_step_shmem_handler->shmemRead(&m_automatic_servo_step);
                     std::cout << "Reading step." << std::endl;
                     std::cout << m_automatic_servo_step.step_num << std::endl;
@@ -352,11 +363,12 @@ void ServoManager::handleAutomaticData()
                     m_servo_controller.setAbsolutePosition(m_automatic_servo_step.position, m_automatic_servo_step.servo_num-1, m_automatic_servo_step.speed);
                     std::this_thread::sleep_for(std::chrono::milliseconds(m_automatic_servo_step.delay));
 
-                    rep_data.step_num = current_step_index;
-                    rep_data.step_status = ScriptedMotionStatus::REQUEST_COMPLETED;
-                    m_scripted_motion_reply_shmem_handler->shmemWrite(&rep_data);
-                    ++current_step_index;
-                    phase = Phase::Idle;
+                    m_rep_data.step_num = m_current_step_index;
+                    m_rep_data.step_status = ScriptedMotionStatus::REQUEST_COMPLETED;
+                    m_scripted_motion_reply_shmem_handler->shmemWrite(&m_rep_data);
+                    ++m_current_step_index;
+                    m_phase = Phase::Idle;
+                    m_log_phase = true;
                 }
                 default:
                     break;

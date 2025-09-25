@@ -14,8 +14,11 @@ namespace video_handler
     const std::string VIDEO_CODEC = "h264";
     const std::string VIDEO_SRC = "auto";
 
+    static constexpr int VIDEO_DSCP = 34;
+
     #pragma pack(push, 1)
-    struct UdpMjpegHdr {
+    struct UdpMjpegHdr
+    {
         uint32_t magic;      // 'MJPG' = 0x4D4A5047
         uint32_t seq;        // frame num
         uint16_t frag_idx;   // fragment index [0..frag_cnt-1]
@@ -26,8 +29,10 @@ namespace video_handler
     };
     #pragma pack(pop)
 
+    static_assert(sizeof(UdpMjpegHdr) == 24, "Unexpected UdpMjpegHdr size");
 
-    struct V4L2Ctx {
+    struct V4L2Ctx
+    {
         int fd = -1;
         struct Buffer { void* start=nullptr; size_t len=0; } bufs[8];
         int nbufs = 0;

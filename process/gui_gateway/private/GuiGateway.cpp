@@ -68,6 +68,7 @@ void GuiGateway::runOnArm()
     m_scripted_motion_request_thread = std::thread(handleArmScriptedMotionRequest, this);
     m_diagnostic_thread.join();
     m_control_selection_thread.join();
+    m_scripted_motion_request_thread.join();
 }
 
 void GuiGateway::handleGuiDiagnostic(GuiGateway * gg)
@@ -152,6 +153,8 @@ void GuiGateway::handleGuiScriptedMotionRequest(GuiGateway * gg)
     enum class Phase { Idle, StartReq, HandleRequest, WaitArmComplete, StopReq, EndReq };
     Phase phase = Phase::Idle;
 
+    bool log_phase = true;
+
     while (gg->m_run_process)
     {
         if (gg->m_scripted_motion_request_shmem_status->openShmem() && gg->m_scripted_motion_reply_shmem_status->openShmem() && gg->m_scripted_motion_step_shmem_handler->openShmem())
@@ -160,18 +163,29 @@ void GuiGateway::handleGuiScriptedMotionRequest(GuiGateway * gg)
             {
                 case Phase::Idle:
                 {
+                    if (log_phase)
+                    {
+                        std::cout << "IDLE" << std::endl;
+                        log_phase = false;
+                    } 
                     if (!gg->m_scripted_motion_request_shmem_status->shmemRead(&req_data))
                     {
                         std::cout << "[GUI GATEWAY] Error: Couldn't read automated motion request SHMEM." << std::endl;
                         break;
                     }
-                    if (req_data.step_num == current_step_index && req_data.step_status == ScriptedMotionStatus::START_REQUEST)
+                    if (req_data.step_status == ScriptedMotionStatus::START_REQUEST)
                     {
-                        std::cout << "Start request" << std::endl;
-                        gg_req_data.step_num = current_step_index;
-                        gg_req_data.step_status = ScriptedMotionStatus::START_REQUEST;
-                        gg->m_scripted_motion_request_inet_handler->serverWrite(&gg_req_data);
-                        phase = Phase::HandleRequest;
+                        if (req_data.step_num == 0 && current_step_index != 0)
+                            current_step_index = 0;
+                        if (req_data.step_num == current_step_index)
+                        {
+                            std::cout << "Start request" << std::endl;
+                            gg_req_data.step_num = current_step_index;
+                            gg_req_data.step_status = ScriptedMotionStatus::START_REQUEST;
+                            gg->m_scripted_motion_request_inet_handler->serverWrite(&gg_req_data);
+                            phase = Phase::HandleRequest;
+                            log_phase = true;
+                        }
                     }
                     else if (req_data.step_status != ScriptedMotionStatus::START_REQUEST)
                     {
@@ -200,11 +214,20 @@ void GuiGateway::handleGuiScriptedMotionRequest(GuiGateway * gg)
                 }
                 case Phase::HandleRequest:
                 {
+                    if (log_phase)
+                    {
+                        std::cout << "HANDLE_REQUEST" << std::endl;
+                        log_phase = false;
+                    } 
                     std::cout << "Handling request data. Step num: " << current_step_index << std::endl;
+                    if (gg->m_scripted_motion_request_shmem_status->shmemRead(&req_data) &&
+                        req_data.step_status != ScriptedMotionStatus::START_REQUEST)
+                    { phase = Phase::Idle; log_phase = true; break; }
                     if (!gg->m_scripted_motion_step_shmem_handler->shmemRead(&servo_step))
                     {
                         std::cout << "[GUI GATEWAY] Error: Couldn't read automated motion request SHMEM." << std::endl;
                         phase = Phase::Idle;
+                        log_phase = true;
                         break;
                     }
                     gg->m_scripted_motion_step_inet_handler->serverWrite(&servo_step);
@@ -213,6 +236,11 @@ void GuiGateway::handleGuiScriptedMotionRequest(GuiGateway * gg)
                 }
                 case Phase::WaitArmComplete:
                 {
+                    if (log_phase)
+                    {
+                        std::cout << "WAIT_ARM_COMPLETE" << std::endl;
+                        log_phase = false;
+                    } 
                     // Check if request was cancelled
                     if (!gg->m_scripted_motion_request_shmem_status->shmemRead(&req_data))
                     {
@@ -223,23 +251,23 @@ void GuiGateway::handleGuiScriptedMotionRequest(GuiGateway * gg)
                     {
                         current_step_index = 0;
                         phase = Phase::Idle;
+                        log_phase = true;
                     }
-                    if (gg->m_scripted_motion_request_inet_handler->serverRead(&gg_rep_data) < 0)
-                    {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    }
-                    if (gg_rep_data.step_num == current_step_index && gg_rep_data.step_status == ScriptedMotionStatus::REQUEST_COMPLETED)
+                    int rc = gg->m_scripted_motion_request_inet_handler->serverRead(&gg_rep_data);
+                    if (rc < 0) { std::this_thread::sleep_for(std::chrono::milliseconds(100)); break; }
+                    if (rc == 0) { break; }
+                    if (gg_rep_data.step_num == current_step_index &&
+                        gg_rep_data.step_status == ScriptedMotionStatus::REQUEST_COMPLETED)
                     {
                         rep_data.step_num = current_step_index;
                         rep_data.step_status = ScriptedMotionStatus::REQUEST_COMPLETED;
                         if (!gg->m_scripted_motion_reply_shmem_status->shmemWrite(&rep_data))
                         {
                             std::cout << "[GUI GATEWAY] Error: Couldn't write automated motion reply SHMEM." << std::endl;
-                            phase = Phase::Idle;
-                            break;
+                            phase = Phase::Idle; log_phase = true; break;
                         }
                         ++current_step_index;
-                        phase = Phase::Idle;
+                        phase = Phase::Idle; log_phase = true;
                     }
                     break;
                 }
@@ -378,12 +406,19 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
     enum class Phase { Idle, StartReq, HandleRequest, WaitArmComplete, StopReq, EndReq };
     Phase phase = Phase::Idle;
 
+    bool log_phase = true;
+
     while (gg->m_run_process)
     {
         switch (phase)
         {
             case Phase::Idle:
             {
+                if (log_phase)
+                {
+                    std::cout << "IDLE" << std::endl;
+                    log_phase = false;
+                } 
                 // Wait for server data
                 auto rc = gg->m_scripted_motion_request_inet_handler->clientRead(&gg_req_data);
                 if (rc < 0)
@@ -396,18 +431,23 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
                         std::this_thread::sleep_for(std::chrono::seconds(1));
                         connection_retries = 0;
                     }
-                        OdinServoStep ping{};
-                        (void)gg->m_scripted_motion_step_inet_handler->clientRead(&ping);
+                    break;
                 }
                 else if (rc == 0)
                 {
                     break;
                 }
-                if (gg_req_data.step_num == current_step_index && gg_req_data.step_status == ScriptedMotionStatus::START_REQUEST)
+                if (gg_req_data.step_status == ScriptedMotionStatus::START_REQUEST)
                 {
-                    req_data.step_num = current_step_index;
-                    req_data.step_status = ScriptedMotionStatus::START_REQUEST;
-                    phase = Phase::HandleRequest;
+                    if (gg_req_data.step_num == 0 && current_step_index != 0)
+                        current_step_index = 0;
+                    if (gg_req_data.step_num == current_step_index)
+                    {
+                        req_data.step_num = current_step_index;
+                        req_data.step_status = ScriptedMotionStatus::START_REQUEST;
+                        phase = Phase::HandleRequest;
+                        log_phase = true;
+                    }
                 }
                 else if (gg_req_data.step_status != ScriptedMotionStatus::START_REQUEST)
                 {
@@ -420,6 +460,11 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
             }
             case Phase::HandleRequest:
             {
+                if (log_phase)
+                {
+                    std::cout << "HANDLE_REQUEST" << std::endl;
+                    log_phase = false;
+                } 
                 std::cout << "Handling request data. Step num: " << current_step_index << std::endl;
                 if (gg->m_scripted_motion_step_inet_handler->clientRead(&servo_step) < 0)
                 {
@@ -429,10 +474,16 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
                 gg->m_scripted_motion_step_shmem_handler->shmemWrite(&servo_step);
                 gg->m_scripted_motion_request_shmem_status->shmemWrite(&req_data);
                 phase = Phase::WaitArmComplete;
+                log_phase = true;
                 break;
             }
             case Phase::WaitArmComplete:
             {
+                if (log_phase)
+                {
+                    std::cout << "WAIT_ARM_COMPLETE" << std::endl;
+                    log_phase = false;
+                }
                 // Check if request was cancelled or connection with server was lost
                 auto rc = gg->m_scripted_motion_request_inet_handler->clientRead(&gg_req_data);
                 if (rc < 0)
@@ -446,6 +497,7 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
                         connection_retries = 0;
                         current_step_index = 0;
                         phase = Phase::Idle;
+                        log_phase = true;
                     }
                 } 
                 else if (rc == 0)
@@ -458,6 +510,7 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
                     {
                         current_step_index = 0;
                         phase = Phase::Idle;
+                        log_phase = true;
                     }
                 }
                 gg->m_scripted_motion_reply_shmem_status->shmemRead(&rep_data);
@@ -472,6 +525,7 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
                     }
                     ++current_step_index;
                     phase = Phase::Idle;
+                    log_phase = true;
                     break;
                 }
             }
