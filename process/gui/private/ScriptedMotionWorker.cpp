@@ -90,7 +90,11 @@ void ScriptedMotionWorker::processMotion()
             }
             case Phase::WaitStepCompleted:
             {
-                m_scripted_motion_reply_shmem_handler->shmemRead(&rep_data);
+                if (!m_scripted_motion_reply_shmem_handler->shmemRead(&rep_data))
+                {
+                    QThread::msleep(5);
+                    break;
+                }
                 if (rep_data.step_num == m_current_step_index && rep_data.step_status == ScriptedMotionStatus::REQUEST_COMPLETED)
                 {
                     ++m_current_step_index;

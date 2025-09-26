@@ -411,6 +411,10 @@ bool ShmemHandler<T>::readShmemId()
     getline(ifs, obtained_pid);
     if (obtained_pid != m_identifier_num)
     {
+        if (m_is_shmem_opened)
+        { 
+            closeShmem();
+        }
         m_is_shmem_opened = false;
         m_identifier_num = obtained_pid;
 
@@ -429,12 +433,15 @@ bool ShmemHandler<T>::readShmemId()
 template <typename T>
 bool ShmemHandler<T>::safeSemWait(sem_t* sem, const std::string& sem_name)
 {
-    if (sem_wait(sem) == -1)
+    for (;;) 
     {
-        std::cerr << "sem_wait failed on [" << sem_name << "]: " << strerror(errno) << std::endl;
-        return false;
+        if (sem_wait(sem) == 0) return true;
+        if (errno == EINTR) continue;
+        {
+            std::cerr << "sem_wait failed on [" << sem_name << "]: " << strerror(errno) << std::endl;
+            return false;
+        }
     }
-    return true;
 }
 
 template <typename T>

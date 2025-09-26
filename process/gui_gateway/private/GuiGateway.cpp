@@ -192,18 +192,7 @@ void GuiGateway::handleGuiScriptedMotionRequest(GuiGateway * gg)
                         current_step_index = 0;
                         rep_data.step_num = current_step_index;
                         rep_data.step_status = ScriptedMotionStatus::IDLE;
-                        // Check client connection while in IDLE
-                        if (!gg->m_scripted_motion_request_inet_handler->serverWrite(&rep_data))
-                        {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                            ++connection_retries;
-                            if (connection_retries == 10)
-                            {
-                                std::cout << "Error while checking client connection. Waiting 10 seconds before retry." << std::endl;
-                                std::this_thread::sleep_for(std::chrono::seconds(1));
-                                connection_retries = 0;
-                            }
-                        }
+                        gg->m_scripted_motion_request_inet_handler->serverWrite(&rep_data);
                         if (!gg->m_scripted_motion_reply_shmem_status->shmemWrite(&rep_data))
                         {
                             std::cout << "[GUI GATEWAY] Error: Couldn't write automated motion reply SHMEM." << std::endl;
@@ -466,9 +455,10 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
                     log_phase = false;
                 } 
                 std::cout << "Handling request data. Step num: " << current_step_index << std::endl;
-                if (gg->m_scripted_motion_step_inet_handler->clientRead(&servo_step) < 0)
+                if (gg->m_scripted_motion_step_inet_handler->clientRead(&servo_step) <= 0)
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                    break;
                 }
                 // First send step info, then request movement
                 gg->m_scripted_motion_step_shmem_handler->shmemWrite(&servo_step);

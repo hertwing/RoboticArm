@@ -18,6 +18,9 @@
 #include <memory>
 #include <thread>
 #include <chrono>
+#include <atomic>
+#include <mutex>
+#include <condition_variable>
 
 template <typename T>
 class TcpHandler
@@ -39,8 +42,13 @@ public:
     static void signalCallbackHandler(int signum);
 
 private:
-    void disconnectAndWaitForNewClient();
-    void reconnectToServer();
+    void start_session_thread();
+    void stop_session_thread();
+    void session_loop_server();
+    void session_loop_client();
+    void close_connfd();
+    void close_sockfd();
+    void set_connected(bool v);
 
     bool handleConnection();
 
@@ -66,6 +74,14 @@ private:
     struct timeval m_read_timeout;
 
     static bool m_run_process;
+
+    std::thread m_session_thread;
+    std::atomic<bool> m_stop{false};
+    std::atomic<bool> m_connected{false};
+    std::atomic<bool> m_is_server{false};
+    std::mutex m_fd_mtx; // protects m_sockfd/m_connfd during reopen/close
+    int m_backoff_ms = 500;   // starts at 0.5s
+    int m_backoff_ms_max = 5000; // caps at 5s
 };
 
 template <typename T>
@@ -82,35 +98,42 @@ TcpHandler<T>::TcpHandler(std::uint64_t buffer_size, const std::uint16_t & port)
     m_servaddr{},
     m_cli{},
     m_server_activity(0),
-    m_read_timeout{0,0}
+    m_read_timeout{0,0},
+    m_session_thread(),
+    m_stop(false),
+    m_connected(false),
+    m_is_server(true)
 {
-    while(createTcpServer() != 0 && m_run_process)
-    {
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-    }
-    while(acceptClient() != 0 && m_run_process)
-    {
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-    }
+    start_session_thread();
 };
 
 template <typename T>
 TcpHandler<T>::TcpHandler(std::uint64_t buffer_size, const std::uint16_t & port, const std::string & server_ip) :
     m_buffer_size(buffer_size),
+    m_sockfd(-1),
+    m_connfd(-1),
     m_port(port),
-    m_server_ip(server_ip)
+    m_server_ip(server_ip),
+    m_len(0),
+    m_servaddr{},
+    m_cli{},
+    m_server_activity(0),
+    m_read_timeout{0,0},
+    m_session_thread(),
+    m_stop(false),
+    m_connected(false),
+    m_is_server(false)
 {
-    while(createTcpClientSocket() != 0 && m_run_process)
-    {
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-    };
+    start_session_thread();
 };
 
 template <typename T>
 TcpHandler<T>::~TcpHandler()
 {
-    if (m_sockfd >= 0) close(m_sockfd);
-    if (m_connfd >= 0) close(m_connfd);
+    stop_session_thread();
+    std::lock_guard<std::mutex> lk(m_fd_mtx);
+    if (m_sockfd >= 0) ::close(m_sockfd);
+    if (m_connfd >= 0) ::close(m_connfd);
     m_sockfd = -1;
     m_connfd = -1;
 }
@@ -137,7 +160,7 @@ std::int8_t TcpHandler<T>::createTcpServer()
     int reuse_addr = 1;
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr)) == -1) {
         std::cout << "Error setting SO_REUSEADDR: " << strerror(errno) << std::endl;
-        close(m_sockfd);
+        ::close(m_sockfd);
         m_sockfd = -1;
         return -1;
     }
@@ -146,7 +169,7 @@ std::int8_t TcpHandler<T>::createTcpServer()
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEPORT, &reuse_port, sizeof(reuse_port)) == -1) {
         if (errno != ENOPROTOOPT) {
             std::cout << "Error setting SO_REUSEPORT: " << strerror(errno) << std::endl;
-            close(m_sockfd);
+            ::close(m_sockfd);
             m_sockfd = -1;
             return -1;
         }
@@ -164,7 +187,7 @@ std::int8_t TcpHandler<T>::createTcpServer()
             std::cout << "Binding server socket error: " << strerror(errno) << std::endl;
         }
 
-        close(m_sockfd);
+        ::close(m_sockfd);
         m_sockfd = -1;
         return -1;
     }
@@ -172,7 +195,7 @@ std::int8_t TcpHandler<T>::createTcpServer()
     if (listen(m_sockfd, 5) == -1)
     {
         std::cout << "Server listen error: " << strerror(errno) << std::endl;
-        close(m_sockfd);
+        ::close(m_sockfd);
         m_sockfd = -1;
         return -1;
     }
@@ -217,39 +240,21 @@ std::int8_t TcpHandler<T>::acceptClient()
         return -1;
     }
 
-    while (m_run_process)
+    m_connfd = accept(m_sockfd, NULL, NULL);
+    if (m_connfd == -1)
     {
-        m_connfd = accept(m_sockfd, NULL, NULL);
-        if (m_connfd == -1)
-        {
-            if (errno == EINTR)
-            {
-                std::cout << "Accept interrupted by signal, retrying..." << std::endl;
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                continue;
-            }
-            else if (errno == EBADF || errno == EINVAL)
-            {
-                std::cerr << "Socket invalid or closed. Attempting to recreate server socket..." << std::endl;
-                close(m_sockfd);
-                m_sockfd = -1;
-                if (createTcpServer() != 0)
-                {
-                    std::cerr << "Recreating server socket failed." << std::endl;
-                    return -1;
-                }
-                continue;
-            }
-            std::cout << "Error when accepting client: " << strerror(errno) << std::endl;
-            return -1;
+        if (errno == EINTR) return -1;
+        if (errno == EBADF || errno == EINVAL) {
+            std::cerr << "Socket invalid or closed. Attempting to recreate server socket..." << std::endl;
+            ::close(m_sockfd);
+            m_sockfd = -1;
+            return createTcpServer();
         }
-
-        std::cout << "Client accepted." << std::endl;
-        return 0;
+        std::cout << "Error when accepting client: " << strerror(errno) << std::endl;
+        return -1;
     }
-
-    std::cout << "Server stopped, cannot accept clients." << std::endl;
-    return -1;
+    std::cout << "Client accepted." << std::endl;
+    return 0;
 }
 
 template <typename T>
@@ -272,7 +277,7 @@ std::int8_t TcpHandler<T>::createTcpClientSocket()
     if (inet_pton(AF_INET, m_server_ip.c_str(), &m_servaddr.sin_addr) <= 0)
     {
         std::cout << "Invalid address or address not supported: " << m_server_ip << std::endl;
-        close(m_sockfd);
+        ::close(m_sockfd);
         m_sockfd = -1;
         return -1;
     }
@@ -280,7 +285,7 @@ std::int8_t TcpHandler<T>::createTcpClientSocket()
     int reuse_addr = 1;
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr)) == -1) {
         std::cout << "Error setting SO_REUSEADDR: " << strerror(errno) << std::endl;
-        close(m_sockfd);
+        ::close(m_sockfd);
         m_sockfd = -1;
         return -1;
     }
@@ -289,7 +294,7 @@ std::int8_t TcpHandler<T>::createTcpClientSocket()
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEPORT, &reuse_port, sizeof(reuse_port)) == -1) {
         if (errno != ENOPROTOOPT) {
             std::cout << "Error setting SO_REUSEPORT: " << strerror(errno) << std::endl;
-            close(m_sockfd);
+            ::close(m_sockfd);
             m_sockfd = -1;
             return -1;
         }
@@ -298,11 +303,12 @@ std::int8_t TcpHandler<T>::createTcpClientSocket()
     if (connect(m_sockfd, (struct sockaddr*)&m_servaddr, sizeof(m_servaddr)) == -1)
     {
         std::cout << "Error when connecting to the server: " << strerror(errno) << std::endl;
-        close(m_sockfd);
+        ::close(m_sockfd);
         m_sockfd = -1;
         return -1;
     }
 
+    enable_tcp_options(m_sockfd);
     std::cout << "Connected with the server." << std::endl;
     return 0;
 }
@@ -310,14 +316,16 @@ std::int8_t TcpHandler<T>::createTcpClientSocket()
 template <typename T>
 std::int8_t TcpHandler<T>::serverRead(T * buff)
 {
-    if (!handleConnection())
+    if (!m_run_process) return -1;
+    if (!m_connected.load(std::memory_order_acquire)) return 0;
+    int fd;
+    { std::lock_guard<std::mutex> lk(m_fd_mtx); fd = m_connfd; }
+    if (fd < 0) return 0;
+    if (!read_exact(fd, buff, m_buffer_size, /*100ms*/100000))
     {
-        return -1;
-    }
-    if (!read_exact(m_connfd, buff, m_buffer_size, /*100ms*/100000)) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return 0; // timeout
+        if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
         std::cerr << "[server] read_exact failed: " << strerror(errno) << std::endl;
-        disconnectAndWaitForNewClient();
+        set_connected(false);
         return -1;
     }
     return 1;
@@ -326,13 +334,15 @@ std::int8_t TcpHandler<T>::serverRead(T * buff)
 template <typename T>
 bool TcpHandler<T>::serverWrite(const T * buff)
 {
-    if (!handleConnection())
+    if (!m_run_process) return false;
+    if (!m_connected.load(std::memory_order_acquire)) return false;
+    int fd;
+    { std::lock_guard<std::mutex> lk(m_fd_mtx); fd = m_connfd; }
+    if (fd < 0) return false;
+    if (!write_exact(fd, buff, m_buffer_size, 100000))
     {
-        return false;
-    }
-    if (!write_exact(m_connfd, buff, m_buffer_size, 100000)) {
         std::cerr << "[server] write_exact failed: " << strerror(errno) << std::endl;
-        disconnectAndWaitForNewClient();
+        set_connected(false);
         return false;
     }
     return true;
@@ -341,14 +351,16 @@ bool TcpHandler<T>::serverWrite(const T * buff)
 template <typename T>
 std::int8_t TcpHandler<T>::clientRead(T * buff)
 {
-    if (!handleConnection())
+    if (!m_run_process) return -1;
+    if (!m_connected.load(std::memory_order_acquire)) return 0;
+    int fd;
+    { std::lock_guard<std::mutex> lk(m_fd_mtx); fd = m_sockfd; }
+    if (fd < 0) return 0;
+    if (!read_exact(fd, buff, m_buffer_size, 100000))
     {
-        return -1;
-    }
-    if (!read_exact(m_sockfd, buff, m_buffer_size, 100000)) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) return 0;
         std::cerr << "[client] read_exact failed: " << strerror(errno) << std::endl;
-        reconnectToServer();
+        set_connected(false);
         return -1;
     }
     return 1;
@@ -357,13 +369,15 @@ std::int8_t TcpHandler<T>::clientRead(T * buff)
 template <typename T>
 bool TcpHandler<T>::clientWrite(const T * buff)
 {
-    if (!handleConnection())
+    if (!m_run_process) return false;
+    if (!m_connected.load(std::memory_order_acquire)) return false;
+    int fd;
+    { std::lock_guard<std::mutex> lk(m_fd_mtx); fd = m_sockfd; }
+    if (fd < 0) return false;
+    if (!write_exact(fd, buff, m_buffer_size, 100000))
     {
-        return false;
-    }
-    if (!write_exact(m_sockfd, buff, m_buffer_size, 100000)) {
         std::cerr << "[client] write_exact failed: " << strerror(errno) << std::endl;
-        reconnectToServer();
+        set_connected(false);
         return false;
     }
     return true;
@@ -374,44 +388,162 @@ bool TcpHandler<T>::handleConnection()
 {
     if (!m_run_process)
     {
-        if (m_sockfd >= 0)
-        {
-            std::cout << "Closing server socket." << std::endl;
-            close(m_sockfd);
-            m_sockfd = -1;
-        }
-        if (m_connfd >= 0)
-        {
-            std::cout << "Closing client socket." << std::endl;
-            close(m_connfd);
-            m_connfd = -1;
-        }
+        close_sockfd();
+        close_connfd();
         return false;
     }
     return true;
 }
 
 template <typename T>
-void TcpHandler<T>::disconnectAndWaitForNewClient()
+void TcpHandler<T>::set_connected(bool v) 
 {
-    if (m_connfd >= 0) { shutdown(m_connfd, SHUT_RDWR); close(m_connfd); }
-    m_connfd = -1;
-    while (acceptClient() != 0 && m_run_process)
+    m_connected.store(v, std::memory_order_release);
+    if (!v) 
     {
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        // prepare backoff on next loop
+        m_backoff_ms = std::min(m_backoff_ms * 2, m_backoff_ms_max);
+    } 
+    else 
+    {
+        m_backoff_ms = 500; // reset on success
     }
 }
 
 template <typename T>
-void TcpHandler<T>::reconnectToServer()
+void TcpHandler<T>::close_connfd() 
 {
-    std::cout << "[client] RECONNECTING TO SERVER..." << std::endl;
-    if (m_sockfd >= 0) { shutdown(m_sockfd, SHUT_RDWR); close(m_sockfd); }
+    std::lock_guard<std::mutex> lk(m_fd_mtx);
+    if (m_connfd >= 0) { ::shutdown(m_connfd, SHUT_RDWR); ::close(m_connfd); }
+    m_connfd = -1;
+}
+
+template <typename T>
+void TcpHandler<T>::close_sockfd()
+{
+    std::lock_guard<std::mutex> lk(m_fd_mtx);
+    if (m_sockfd >= 0) { ::shutdown(m_sockfd, SHUT_RDWR); ::close(m_sockfd); }
     m_sockfd = -1;
-    while(createTcpClientSocket() != 0 && m_run_process)
-    {
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+}
+
+template <typename T>
+void TcpHandler<T>::start_session_thread()
+{
+    m_stop.store(false, std::memory_order_release);
+    if (m_is_server.load()) {
+        m_session_thread = std::thread(&TcpHandler<T>::session_loop_server, this);
+    } else {
+        m_session_thread = std::thread(&TcpHandler<T>::session_loop_client, this);
     }
+}
+
+template <typename T>
+void TcpHandler<T>::stop_session_thread()
+{
+    m_stop.store(true, std::memory_order_release);
+    if (m_session_thread.joinable()) m_session_thread.join();
+}
+
+template <typename T>
+void TcpHandler<T>::session_loop_server()
+{
+    // Create/listen socket once, then accept/reaccept
+    while (m_run_process && !m_stop.load())
+    {
+        if (m_sockfd < 0) {
+            if (createTcpServer() != 0)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(m_backoff_ms));
+                continue;
+            }
+        }
+        // Accept client
+        {
+            std::lock_guard<std::mutex> lk(m_fd_mtx);
+            int rc = acceptClient();
+            if (rc != 0)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(m_backoff_ms));
+                continue;
+            }
+            enable_tcp_options(m_connfd);
+        }
+        set_connected(true);
+        // Monitor the connection (poll with a tiny read peeking 0 bytes)
+        while(m_run_process && !m_stop.load())
+        {
+            // Cheap liveness check: select for read with 0-timeout to see HUP
+            int rc = select_with_deadline(m_connfd, /*read*/true, /*write*/false, /*100ms*/100000);
+            if (rc < 0) { /* error */ }
+            if (rc > 0)
+            {
+                // Try a non-destructive peek; if 0 => closed
+                char tmp;
+                ssize_t n = recv(m_connfd, &tmp, 1, MSG_PEEK | MSG_DONTWAIT);
+                if (n == 0) 
+                { // orderly shutdown
+                    std::cerr << "[server] peer closed\n";
+                    break;
+                }
+                if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) 
+                {
+                    std::cerr << "[server] liveness check error: " << strerror(errno) << "\n";
+                    break;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            if (!m_run_process) break;
+        }
+        set_connected(false);
+        close_connfd();
+        // stay in loop to accept again
+    }
+    set_connected(false);
+    close_connfd();
+    close_sockfd();
+}
+
+template <typename T>
+void TcpHandler<T>::session_loop_client()
+{
+    while(m_run_process && !m_stop.load())
+    {
+        // (Re)connect
+        {
+            std::lock_guard<std::mutex> lk(m_fd_mtx);
+            if (m_sockfd >= 0) { ::shutdown(m_sockfd, SHUT_RDWR); ::close(m_sockfd); m_sockfd = -1; }
+            if (createTcpClientSocket() != 0) {
+                set_connected(false);
+                std::this_thread::sleep_for(std::chrono::milliseconds(m_backoff_ms));
+                continue;
+            }
+            enable_tcp_options(m_sockfd);
+        }
+        set_connected(true);
+        // Monitor
+        while (m_run_process && !m_stop.load())
+        {
+            int rc = select_with_deadline(m_sockfd, /*read*/true, /*write*/false, /*100ms*/100000);
+            if (rc < 0) { /* error */ }
+            if (rc > 0) {
+                char tmp;
+                ssize_t n = recv(m_sockfd, &tmp, 1, MSG_PEEK | MSG_DONTWAIT);
+                if (n == 0) { std::cerr << "[client] server closed\n"; break; }
+                if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
+                {
+                    std::cerr << "[client] liveness check error: " << strerror(errno) << "\n";
+                    break;
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            if (!m_run_process) break;
+        }
+        set_connected(false);
+        // backoff before next connect
+        std::this_thread::sleep_for(std::chrono::milliseconds(m_backoff_ms));
+    }
+    set_connected(false);
+    close_sockfd();
 }
 
 template <typename T>

@@ -369,6 +369,7 @@ void ServoManager::handleAutomaticData()
                     ++m_current_step_index;
                     m_phase = Phase::Idle;
                     m_log_phase = true;
+                    break;
                 }
                 default:
                     break;
