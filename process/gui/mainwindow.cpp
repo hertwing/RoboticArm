@@ -230,12 +230,20 @@ void MainWindow::switchMode(UIMode m)
         if (m_diagnostic_timer) m_diagnostic_timer->stop();
     }
 
-    switch (m) {
+    switch (m)
+    {
         case UIMode::MAIN:       ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN)); break;
         case UIMode::JOYPAD:     ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::JOYPAD)); break;
         case UIMode::CAMERA:     ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::CAMERA)); break;
         case UIMode::DIAGNOSTIC: ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::DIAGNOSTIC)); break;
         case UIMode::AUTOMATIC:  ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::AUTOMATIC)); break;
+        default: break;
+    }
+
+    if (m_mode == UIMode::CAMERA && m != UIMode::CAMERA) {
+        m_haveFaceQt = false;
+        m_faceBusy = false;
+        if (ui->camera_label) ui->camera_label->clear();
     }
 
     auto setOn  = [](QPushButton* b, const QString& on){ b->setStyleSheet(on);  };
@@ -246,7 +254,8 @@ void MainWindow::switchMode(UIMode m)
     setOff(ui->button_diagnostic, DISABLED_DIAGNOSTIC_STYLE_SHEET);
     setOff(ui->button_automatic,  DISABLED_AUTOMATIC_STYLE_SHEET);
 
-    switch (m) {
+    switch (m)
+    {
         case UIMode::JOYPAD:     setOn(ui->button_joypad,     ENABLED_JOYPAD_STYLE_SHEET);     break;
         case UIMode::CAMERA:     setOn(ui->button_camera,     ENABLED_CAMERA_STYLE_SHEET);     break;
         case UIMode::DIAGNOSTIC: setOn(ui->button_diagnostic, ENABLED_DIAGNOSTIC_STYLE_SHEET); break;
@@ -254,12 +263,14 @@ void MainWindow::switchMode(UIMode m)
         default: break;
     }
 
-    switch (m) {
+    switch (m)
+    {
         case UIMode::JOYPAD:     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::JOYPAD); break;
         case UIMode::CAMERA:     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::CAMERA); break;
         case UIMode::DIAGNOSTIC: m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::DIAGNOSTIC); break;
         case UIMode::AUTOMATIC:  m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::AUTOMATIC); break;
         case UIMode::MAIN:       m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE); break;
+        default: break;
     }
     m_control_selection_shmem_handler->shmemWrite(&m_control_selection);
 
@@ -627,6 +638,8 @@ void MainWindow::handleMotionCompleted()
 
 void MainWindow::onFrame(const QImage& img)
 {
+    if (m_mode != UIMode::CAMERA) return;
+
     if (m_uiTimer.elapsed() < m_uiMinIntervalMs) return;
     m_uiTimer.restart();
 

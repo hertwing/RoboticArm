@@ -72,24 +72,76 @@ bool allOff(int fd) {
     return write4(fd, ALL_LED_ON_L, 0, 0);
 }
 
+double calc_real_freq_from_prescale(uint8_t prescale) {
+    // f = OSC / (4096 * (prescale + 1))
+    return OSC_FREQ_HZ / (4096.0 * (static_cast<double>(prescale) + 1.0));
+}
+
+bool read_mode_regs(int fd, uint8_t& mode1, uint8_t& mode2, uint8_t& prescale) {
+    if (!read8(fd, MODE1, mode1)) return false;
+    if (!read8(fd, MODE2, mode2)) return false;
+    if (!read8(fd, PRESCALE, prescale)) return false;
+    return true;
+}
+
+void print_pca_report(int fd, int target_hz, double tol_pct = 10.0) {
+    uint8_t m1{}, m2{}, ps{};
+    if (!read_mode_regs(fd, m1, m2, ps)) {
+        fprintf(stderr, "[PCA9685] read regs failed\n");
+        return;
+    }
+    const double f_real = calc_real_freq_from_prescale(ps);
+    const double err_pct = 100.0 * (f_real - target_hz) / target_hz;
+
+    printf("[PCA9685] MODE1=0x%02X  MODE2=0x%02X  PRESCALE=%u\n", m1, m2, ps);
+    printf("[PCA9685] freq(target=%d Hz) ≈ %.2f Hz  (err=%.2f%%)\n",
+           target_hz, f_real, err_pct);
+
+    const bool ai      = (m1 & AI)      != 0;
+    const bool sleep   = (m1 & SLEEP)   != 0;
+    const bool restart = (m1 & RESTART) != 0;
+    const bool outdrv  = (m2 & OUTDRV)  != 0;
+    const bool och     = (m2 & OCH)     != 0;
+
+    printf("[PCA9685] AI=%d  SLEEP=%d  RESTART=%d  OUTDRV=%d  OCH=%d\n",
+           ai, sleep, restart, outdrv, och);
+
+    if (sleep) {
+        printf("[PCA9685][WARN] SLEEP=1 po konfiguracji — nie powinno.\n");
+    }
+    if (!ai) {
+        printf("[PCA9685][WARN] AI=0 — warto mieć Auto-Increment=1.\n");
+    }
+    if (!outdrv) {
+        printf("[PCA9685][WARN] MODE2.OUTDRV=0 — zalecany totem-pole (OUTDRV=1).\n");
+    }
+
+    const double tol = std::max(0.5, tol_pct);
+    if (std::fabs(err_pct) > tol) {
+        printf("[PCA9685][WARN] Odchyłka częstotliwości > %.1f%% — sprawdź PRESCALE/oscylator.\n", tol);
+    }
+}
+
 bool setPWMFreq(int fd, int hertz) {
-    // PRESCALE = round(OSC/(4096*freq)) - 1
     double prescale_f = (OSC_FREQ_HZ / (4096.0 * static_cast<double>(hertz))) - 1.0;
     uint8_t prescale = static_cast<uint8_t>(std::round(prescale_f));
+
     uint8_t oldmode{};
     if (!read8(fd, MODE1, oldmode)) return false;
 
-    uint8_t sleepmode = (oldmode & ~RESTART) | SLEEP; // sleep to save PRESCALE
+    uint8_t sleepmode = (oldmode & ~RESTART) | SLEEP;
     if (!write8(fd, MODE1, sleepmode)) return false;
     if (!write8(fd, PRESCALE, prescale)) return false;
 
-    // Get back to work mode + Auto-Increment
     if (!write8(fd, MODE1, (oldmode & ~SLEEP) | AI)) return false;
-    // MODE2: totem pole, update ACK 
-    if (!write8(fd, MODE2, OUTDRV | OCH)) return false;
+    // MODE2
+    if (!write8(fd, MODE2, OUTDRV)) return false;
 
-    // short pause
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    uint8_t mode1_after{};
+    if (!read8(fd, MODE1, mode1_after)) return false;
+    if (!write8(fd, MODE1, mode1_after | RESTART)) return false;
+
     return true;
 }
 } // namespace
