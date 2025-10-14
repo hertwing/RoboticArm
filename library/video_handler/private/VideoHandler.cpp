@@ -35,7 +35,6 @@ namespace odin
 namespace video_handler
 {
 
-// --- TX telemetry (lightweight) ---
 struct TxStats
 {
     uint64_t frames=0, sent_ok=0, dropped=0;
@@ -108,7 +107,8 @@ std::atomic<bool> VideoHandler::m_run_process{true};
 
 static inline uint64_t now_us()
 {
-    struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
     return uint64_t(ts.tv_sec) * 1000000ULL + ts.tv_nsec / 1000ULL;
 }
 
@@ -146,19 +146,30 @@ static bool v4l2_open_mjpg(const std::string& dev, int width, int height, int fp
         return false;
     }
 
-    v4l2_format fmt{}; fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    v4l2_format fmt{};
+    fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     fmt.fmt.pix.width  = width;
     fmt.fmt.pix.height = height;
     fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
     fmt.fmt.pix.field  = V4L2_FIELD_NONE;
     if (ioctl(ctx.fd, VIDIOC_S_FMT, &fmt) < 0)
     { 
-        perror("S_FMT"); v4l2_cleanup(ctx); 
-        return false; 
+        perror("S_FMT");
+        v4l2_cleanup(ctx);
+        return false;
+    }
+
+    v4l2_control ctrl{};
+    ctrl.id = V4L2_CID_JPEG_COMPRESSION_QUALITY;
+    ctrl.value = 60;
+    if (ioctl(ctx.fd, VIDIOC_S_CTRL, &ctrl) < 0)
+    {
+        perror("S_CTRL JPEG_QUALITY");
     }
 
     // FPS
-    v4l2_streamparm sp{}; sp.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    v4l2_streamparm sp{};
+    sp.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     sp.parm.capture.timeperframe.numerator = 1;
     sp.parm.capture.timeperframe.denominator = fps;
     if (ioctl(ctx.fd, VIDIOC_S_PARM, &sp) < 0)
@@ -167,7 +178,10 @@ static bool v4l2_open_mjpg(const std::string& dev, int width, int height, int fp
     }
 
     // MMAP buffers
-    v4l2_requestbuffers req{}; req.count = 4; req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE; req.memory = V4L2_MEMORY_MMAP;
+    v4l2_requestbuffers req{};
+    req.count = 4;
+    req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    req.memory = V4L2_MEMORY_MMAP;
     if (ioctl(ctx.fd, VIDIOC_REQBUFS, &req) < 0 || req.count < 2)
     {
         perror("REQBUFS");
@@ -178,7 +192,10 @@ static bool v4l2_open_mjpg(const std::string& dev, int width, int height, int fp
     ctx.nbufs = std::min<int>(req.count, 8);
     for (int i = 0; i < ctx.nbufs; ++i)
     {
-        v4l2_buffer b{}; b.type = req.type; b.memory = req.memory; b.index = (unsigned)i;
+        v4l2_buffer b{};
+        b.type = req.type;
+        b.memory = req.memory;
+        b.index = static_cast<unsigned>(i);
         if (ioctl(ctx.fd, VIDIOC_QUERYBUF, &b) < 0)
         {
             perror("QUERYBUF");
@@ -273,7 +290,6 @@ std::string VideoHandler::findFirstCamera()
         std::string card;
         if (isCaptureDevice(dev, &card))
         {
-            std::cout << "[VideoHandler] Found camera: " << dev << " (" << card << ")\n";
             return dev;
         }
     }
@@ -333,6 +349,29 @@ bool VideoHandler::startStream(const std::string& dev)
         return false;
     }
 
+    size_t max_frame_len = 0;
+    for (int i = 0; i < m_v4l2.nbufs; ++i)
+        max_frame_len = std::max(max_frame_len, m_v4l2.bufs[i].len);
+
+    uint16_t frag_cnt_max = (uint16_t)((max_frame_len + PAYLOAD_BYTES - 1) / PAYLOAD_BYTES);
+
+    // sanity cap
+    const uint16_t FRAG_HARD_CAP = 2048;
+    frag_cnt_max = std::max<uint16_t>(1, std::min<uint16_t>(frag_cnt_max, FRAG_HARD_CAP));
+
+    m_hdrs.resize(frag_cnt_max);
+    m_iov.resize(frag_cnt_max);
+    m_msgs.resize(frag_cnt_max);
+
+    for (uint16_t i = 0; i < frag_cnt_max; ++i)
+    {
+        std::memset(&m_msgs[i], 0, sizeof(m_msgs[i]));
+        m_iov[i][0].iov_base = &m_hdrs[i];
+        m_iov[i][0].iov_len  = sizeof(UdpMjpegHdr);
+        m_msgs[i].msg_hdr.msg_iov    = m_iov[i].data();
+        m_msgs[i].msg_hdr.msg_iovlen = 2;
+    }
+
     m_seq = 0;
     m_streaming = true;
     if (m_verbose) 
@@ -358,7 +397,7 @@ void VideoHandler::tick()
     if (!m_run_process)
     { 
         stopStream();
-        return; 
+        return;
     }
 
     // If stream works, check camera
@@ -372,13 +411,14 @@ void VideoHandler::tick()
         if (!dev.empty() && dev != m_last_dev)
         {
             if (m_verbose) std::cout << "[VideoHandler] Camera changed: " << m_last_dev << " -> " << dev << "\n";
-            stopStream(); m_last_dev = dev;
+            stopStream();
+            m_last_dev = dev;
             m_next_retry_tp = now + std::chrono::milliseconds(200);
         }
         return;
     }
 
-    // Is stream doesn't work just return
+    // If stream doesn't work then return
     if (std::chrono::steady_clock::now() < m_next_retry_tp) return;
 
     // Find camera
@@ -405,12 +445,16 @@ void VideoHandler::run()
 {
     if (!m_run_process || !m_streaming) return;
 
-    fd_set rfds; FD_ZERO(&rfds); FD_SET(m_v4l2.fd, &rfds);
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(m_v4l2.fd, &rfds);
     timeval tv{0, 5000}; // 5 ms
     int r = ::select(m_v4l2.fd + 1, &rfds, nullptr, nullptr, &tv);
     if (r <= 0 || !FD_ISSET(m_v4l2.fd, &rfds)) return;
 
-    v4l2_buffer b{}; b.type = V4L2_BUF_TYPE_VIDEO_CAPTURE; b.memory = V4L2_MEMORY_MMAP;
+    v4l2_buffer b{};
+    b.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    b.memory = V4L2_MEMORY_MMAP;
     if (ioctl(m_v4l2.fd, VIDIOC_DQBUF, &b) < 0) 
     {
         if (errno == EAGAIN) return;
@@ -443,15 +487,11 @@ void VideoHandler::run()
     // Space to send whole frame (latest-wins)
     const int fps = m_fps > 0 ? m_fps : 30;
     const uint64_t frame_period_us = 1000000ULL / (uint64_t)fps;
-    // const uint64_t send_deadline_us = ts + (frame_period_us * 7) / 10; // 0.7 * T
     const uint64_t send_deadline_us = ts + frame_period_us;
     bool frame_sent_ok = true;
 
-    // Check if header + payload <= MAX_PKT
-    const size_t payload = (MAX_PKT > sizeof(UdpMjpegHdr))
-                           ? (MAX_PKT - sizeof(UdpMjpegHdr))
-                           : 0;
-    if (payload == 0)
+    // Check if header + PAYLOAD_BYTES <= MAX_PKT
+    if (PAYLOAD_BYTES == 0)
     {
         std::cout << "[VideoHandler] Invalid MAX_PKT / header size\n";
         ioctl(m_v4l2.fd, VIDIOC_QBUF, &b);
@@ -460,50 +500,46 @@ void VideoHandler::run()
         return;
     }
 
-    uint16_t frag_cnt = (uint16_t)((len + payload - 1) / payload);
+    uint16_t frag_cnt = (uint16_t)((len + PAYLOAD_BYTES - 1) / PAYLOAD_BYTES);
     if (frag_cnt == 0) frag_cnt = 1;
+    // Sanity check
+    if (frag_cnt > m_msgs.size())
+    {
+        frag_cnt = static_cast<uint16_t>(m_msgs.size());
+    }
 
     // Send whole frame
     {
         m_fd = m_udp->native_fd();
-        m_hdrs.resize(frag_cnt);
-        m_iov.resize(frag_cnt);
-        m_msgs.resize(frag_cnt);
 
         for (uint16_t i = 0; i < frag_cnt; ++i)
         {
-            const size_t off   = size_t(i) * payload;
+            const size_t off   = size_t(i) * PAYLOAD_BYTES;
             if (off >= len) break;
-            const size_t chunk = std::min(payload, len - off);
+            const size_t chunk = std::min(PAYLOAD_BYTES, len - off);
             UdpMjpegHdr h{};
             h.magic    = htonl(0x4D4A5047);
             h.seq      = htonl(m_seq);
             h.frag_idx = htons(i);
             h.frag_cnt = htons(frag_cnt);
             h.ts_us    = htobe64(ts);
-            h.width    = htons(m_v4l2.width);
-            h.height   = htons(m_v4l2.height);
-            m_hdrs[i] = h; 
+            m_hdrs[i]  = h;
 
             m_iov[i][0].iov_base = &m_hdrs[i];
             m_iov[i][0].iov_len  = sizeof(UdpMjpegHdr);
             m_iov[i][1].iov_base = const_cast<uint8_t*>(frame + off);
             m_iov[i][1].iov_len  = chunk;
-
-            std::memset(&m_msgs[i], 0, sizeof(mmsghdr));
-            m_msgs[i].msg_hdr.msg_iov    = m_iov[i].data();
-            m_msgs[i].msg_hdr.msg_iovlen = 2;
         }
 
         int sent_total = 0;
         // simple pacing: after successful sendmmsg short CPU break
         auto tiny_pause = [](){
-            #ifdef _GNU_SOURCE
+#ifdef _GNU_SOURCE
             sched_yield();
-            #else
-            struct timespec ts{0, 50000}; 
+#else
+            struct timespec ts{0, 50000};
             nanosleep(&ts, nullptr); /* 50 µs */
-            #endif
+#endif
         };
 
         uint32_t tx_batches = 0;
@@ -513,9 +549,24 @@ void VideoHandler::run()
         bool missed_deadline = false;
         bool had_send_err = false;
 
-        while (sent_total < frag_cnt) {
-            // deadline
-            if (now_us() >= send_deadline_us) { frame_sent_ok = false; break; }
+        while (sent_total < frag_cnt)
+        {
+            {
+                const uint64_t now = now_us();
+                if (now >= send_deadline_us) {
+                    frame_sent_ok = false;
+                    missed_deadline = true;
+                    break;
+                }
+                const uint64_t us_left = send_deadline_us - now;
+                const int frags_left = frag_cnt - sent_total;
+                if (us_left < 2000 && frags_left > 4)
+                {
+                    frame_sent_ok   = false;
+                    missed_deadline = true;
+                    break;
+                }
+            }
 
             int batch = frag_cnt - sent_total;
             if (batch > 16) batch = 16; // don't push all data at once
@@ -527,11 +578,19 @@ void VideoHandler::run()
                 tiny_pause();
                 continue;
             }
-            if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            {
                 // light backoff
                 ++tx_eagain;
                 struct timespec ts{0, 80000}; /* 80 µs */
                 nanosleep(&ts, nullptr);
+                // check if frame is not too big to finish
+                if (now_us() >= send_deadline_us)
+                {
+                    frame_sent_ok = false;
+                    missed_deadline = true;
+                    break;
+                }
                 // start again
                 continue;
             }
@@ -555,13 +614,14 @@ void VideoHandler::run()
                         if (errno == EAGAIN || errno == EWOULDBLOCK)
                         {
                             ++tx_eagain;
-                            struct timespec ts{0, 120000}; nanosleep(&ts, nullptr);
+                            struct timespec ts{0, 120000};
+                            nanosleep(&ts, nullptr);
                             s = ::sendmsg(m_fd, &mh, MSG_DONTWAIT);
                             if (s < 0)
                             { 
                                 had_send_err = true;
                                 frame_sent_ok = false;
-                                break; 
+                                break;
                             }
                         } 
                         else 
@@ -586,13 +646,6 @@ void VideoHandler::run()
             }
             break;
         }
-        // if we didn't send whole in budged treat it as drop (latest-wins)
-        if (!frame_sent_ok || sent_total < frag_cnt)
-        {
-            if (m_verbose) std::cerr << "[VideoHandler] drop frame seq=" << m_seq
-                                     << " sent=" << sent_total << "/" << frag_cnt << "\n";
-        }
-
         const uint64_t send_us = now_us() - send_t0;
         // Signle log on drop
         if (!frame_sent_ok || sent_total < frag_cnt)
@@ -609,12 +662,12 @@ void VideoHandler::run()
                         << "\n";
             }
         }
-        #if defined(DEBUG)
+#if defined(DEBUG)
         g_tx.note((uint32_t)len, (uint32_t)frag_cnt,
                 frame_sent_ok && (sent_total == frag_cnt),
                 send_us, tx_batches, tx_eagain,
                 missed_deadline, had_send_err, used_fallback);
-        #endif
+#endif
         ++m_seq;
     }
 

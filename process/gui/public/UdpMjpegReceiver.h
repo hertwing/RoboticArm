@@ -5,14 +5,13 @@
 #include "UdpHandler.hpp"
 #include "odin/video_handler/DataTypes.h"
 
-#include <unordered_map>
-#include <chrono>
-#include <memory>
-
+#include <atomic>
 #include <cstdint>
 #include <limits>
 #include <chrono>
 #include <iostream>
+#include <memory>
+#include <unordered_map>
 #endif
 
 #include <QObject>
@@ -91,6 +90,10 @@ public:
     explicit UdpMjpegReceiver(QObject* parent=nullptr);
     ~UdpMjpegReceiver();
 
+public slots:
+    void start();
+    void stop();
+
 signals:
     void frameReady(const QImage&);
 
@@ -98,29 +101,32 @@ private:
     void pollUdp();
     void dropStaleFrames();
 
-    static constexpr std::uint16_t RX_BUDGET = 1024;
-    static constexpr std::uint32_t JPEG_SCRATCH_RESERVE= 512 * 1024;
+    static constexpr int POLL_SLICE_US = 5000;
+    static constexpr int RX_BUDGET = 1024;
     const int BATCH = 64;
+    static constexpr std::uint16_t MAX_INFLIGHT = 64;
     std::unique_ptr<UdpHandler<uint8_t>> m_udpRx;
     QSocketNotifier* m_notifier = nullptr;
     std::vector<uint8_t> m_rxBuf;
-    std::vector<uint8_t> m_jpgScratch;
 
     RxFrameStats m_rxStats;
 
-    struct FragAcc
-    {
-        uint16_t frag_cnt{0};
-        std::vector<uint8_t> data;
-        std::vector<uint16_t> frag_len;
-        std::vector<bool>     got;
-        uint16_t received{0};
-        uint64_t ts_us{0};
-        uint16_t w{0}, h{0};
+    struct FragInfo { uint16_t len; bool got; };
+    struct FragAcc {
+        uint16_t frag_cnt = 0;
+        std::vector<uint8_t> data;   // frag_cnt * MTU
+        std::vector<FragInfo> frag;  // len+got per fragment
+        uint16_t received = 0;
         std::chrono::steady_clock::time_point start;
     };
 
     std::unordered_map<uint32_t, FragAcc> m_acc;
+    // recvmmsg() prealloc
+    std::vector<uint8_t>     m_batchBuf;
+    std::vector<mmsghdr>     m_msgs;
+    std::vector<iovec>       m_iovec;
+    std::vector<sockaddr_in> m_srcs;
+
     uint32_t m_lastDisplayedSeq{0};
 
     QThread*    m_jpegThread = nullptr;

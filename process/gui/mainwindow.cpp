@@ -83,32 +83,52 @@ MainWindow::MainWindow(QWidget * parent):
 
     QMainWindow::showFullScreen();
 
-    // cv::setNumThreads(1);
     m_uiTimer.start();
     const bool cascadeOk = loadFaceCascadeFromResource();
 
-    m_rx = new UdpMjpegReceiver(this);
-    connect(m_rx, &UdpMjpegReceiver::frameReady, this, &MainWindow::onFrame);
+    m_rxThread = new QThread(this);
+    m_rx = new UdpMjpegReceiver();
+    m_rx->moveToThread(m_rxThread);
+
+    connect(m_rxThread, &QThread::started,  m_rx, &UdpMjpegReceiver::start);
+    connect(m_rxThread, &QThread::finished, m_rx, &QObject::deleteLater);
+    connect(m_rx, &UdpMjpegReceiver::frameReady,
+            this, &MainWindow::onFrame,
+            Qt::QueuedConnection);
+
+    m_rxThread->start();
 
     // Worker
-    if (cascadeOk) {
+    if (cascadeOk)
+    {
         m_faceThread = new QThread(this);
         m_CvWorker = new CvWorker(m_cascade_tmp_path);
         m_CvWorker->moveToThread(m_faceThread);
+
         connect(m_faceThread, &QThread::finished, m_CvWorker, &QObject::deleteLater);
-        // Worker output goes back to GUI
-        connect(m_CvWorker, &CvWorker::result, this, [this](bool found, const QRect& r){
-            m_haveFaceQt = found;
-            if (found) m_lastFaceQt = r;
-            m_faceBusy = false;
-        });
+        connect(m_CvWorker, &CvWorker::result, this,
+            [this](bool found, const QRect& r)
+            {
+                m_faceBusy = false;
+                if (!m_camera_pos_ready_data.camera_pos_ready) return;
+                m_haveFaceQt = found;
+
+                if (found && r.isValid() && !r.isEmpty())
+                {
+                    m_face_bbox = r;
+                }
+
+                m_needFreshDetection = false;
+            }
+        );
+
         m_faceThread->start();
-    } else {
+    }
+    else
+    {
         std::cout << "[GUI] Face detection disabled (no cascade)" << std::endl;
     }
-
-    m_fullDetectTimer.start();
-    
+        
     m_scripted_motion_request_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionRequestStatus::IDLE));
     m_scripted_motion_reply_status = std::make_shared<scripted_motion_status_t>(static_cast<scripted_motion_status_t>(ScriptedMotionReplyStatus::IDLE));
     m_automatic_steps = std::make_shared<std::vector<OdinServoStep>>();
@@ -129,6 +149,15 @@ MainWindow::MainWindow(QWidget * parent):
     m_arm_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
         odin::shmem_wrapper::DataTypes::DIAGNOSTIC_FROM_REMOTE_SHMEM_NAME, sizeof(DiagnosticData), false);
     std::cout << "ARM diagnostic data SHMEM fd created." << std::endl;
+    std::cout << "Creating camera position SHMEM fd." << std::endl;
+    m_camera_pos_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<CameraPosData>>(
+        odin::shmem_wrapper::DataTypes::CAMERA_POSITION_SHMEM_NAME, sizeof(CameraPosData), true);
+    std::cout << "Camera position SHMEM fd created." << std::endl;
+    std::cout << "Creating camera position ready SHMEM fd." << std::endl;
+    m_camera_pos_ready_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<CameraPosReadyData>>(
+        odin::shmem_wrapper::DataTypes::CAMERA_POSITION_READY_SHMEM_NAME, sizeof(CameraPosReadyData), true);
+    std::cout << "Camera position ready SHMEM fd created." << std::endl;
+    m_camera_pos_ready_shmem_handler->shmemWrite(&m_camera_pos_ready_data);
 
     m_diagnostic_timer = new QTimer(this);
     m_diagnostic_timer->start(300);
@@ -151,11 +180,11 @@ MainWindow::MainWindow(QWidget * parent):
     m_motionThread->start();
     
     m_charts = new ChartsPanel(
-    ui->chart_view_cpu_usage,
-    ui->chart_view_ram_usage,
-    ui->chart_view_cpu_temp,
-    ui->chart_view_latency,
-    this);
+        ui->chart_view_cpu_usage,
+        ui->chart_view_ram_usage,
+        ui->chart_view_cpu_temp,
+        ui->chart_view_latency,
+        this);
     m_charts->setSnapshot(m_diagnostic_data);
 
     draw_menu();
@@ -183,6 +212,12 @@ MainWindow::~MainWindow()
     }
     if (m_motionWorker) m_motionWorker->stopMotion();
 
+    if (m_rx) QMetaObject::invokeMethod(m_rx, "stop", Qt::BlockingQueuedConnection);
+    if (m_rxThread)
+    {
+        m_rxThread->quit();
+        m_rxThread->wait();
+    }
     if (m_motionThread)
     {
         m_motionThread->quit();
@@ -506,15 +541,15 @@ void MainWindow::on_button_add_step_clicked()
     m_automatic_steps->push_back(s);
     clear_line_edits();
 
-    for (auto s = m_automatic_steps->begin(); s != m_automatic_steps->end(); ++s)
-    {
-        std::cout << +s->step_num << std::endl;
-        std::cout << +s->servo_num << std::endl;
-        std::cout << +s->position << std::endl;
-        std::cout << +s->speed << std::endl;
-        std::cout << +s->delay << std::endl;
-    }
-    std::cout << "---" << std::endl;
+    // for (auto s = m_automatic_steps->begin(); s != m_automatic_steps->end(); ++s)
+    // {
+    //     std::cout << +s->step_num << std::endl;
+    //     std::cout << +s->servo_num << std::endl;
+    //     std::cout << +s->position << std::endl;
+    //     std::cout << +s->speed << std::endl;
+    //     std::cout << +s->delay << std::endl;
+    // }
+    // std::cout << "---" << std::endl;
 }
 
 void MainWindow::clear_line_edits()
@@ -526,7 +561,8 @@ void MainWindow::clear_line_edits()
     }
 }
 
-void MainWindow::on_button_remove_step_clicked() {
+void MainWindow::on_button_remove_step_clicked()
+{
     const int row = ui->lineEdit_step_number->text().toInt() - 1;
     if (row >= 0 && row < m_stepsModel->rowCount())
     {
@@ -537,33 +573,42 @@ void MainWindow::on_button_remove_step_clicked() {
     }
 }
 
-void MainWindow::on_button_table_clear_clicked() {
+void MainWindow::on_button_table_clear_clicked()
+{
     m_stepsModel->clear();
     m_automatic_steps->clear();
 }
 
-void MainWindow::on_button_save_clicked() {
-    try {
+void MainWindow::on_button_save_clicked()
+{
+    try 
+    {
         if (!std::filesystem::exists(m_scripted_motion_files_path))
             std::filesystem::create_directories(m_scripted_motion_files_path);
 
         const std::string file_name = ui->lineEdit_file_name->text().toStdString();
         if (file_name.empty()) return;
 
-        std::ofstream file((m_scripted_motion_files_path / file_name).string());
-        for (const auto& s : *m_automatic_steps) {
-            file << s.servo_num << "\n"
-                 << s.position  << "\n"
-                 << s.speed     << "\n"
-                 << s.delay     << "\n";
+        const auto path = m_scripted_motion_files_path / file_name;
+        if (auto res = m_odin_steps_io_handler.saveSteps(path, *m_automatic_steps); !res)
+        {
+            std::cout << "[OdinGui][save] " << m_odin_steps_io_handler.toString(res.error) << ": " << res.message << "\n";
+            QMessageBox::warning(this, "Save failed", QString::fromStdString(res.message));
+            return;
         }
         ui->lineEdit_file_name->clear();
         scan_automatic_files();
-    } catch (const std::exception& e) { std::cout << e.what() << std::endl; }
+    }
+    catch (const std::exception& e)
+    { 
+        std::cout << e.what() << std::endl; 
+    }
 }
 
-void MainWindow::on_button_load_clicked() {
-    try {
+void MainWindow::on_button_load_clicked()
+{
+    try 
+    {
         m_stepsModel->clear();
         m_automatic_steps->clear();
 
@@ -572,18 +617,25 @@ void MainWindow::on_button_load_clicked() {
         const auto* item = ui->list_automatic_files->currentItem();
         if (!item) return;
 
-        std::ifstream file((m_scripted_motion_files_path / item->text().toStdString()).string());
-        for (;;) {
-            OdinServoStep s{};
-            if (!(file >> s.servo_num)) break;
-            if (!(file >> s.position))  break;
-            if (!(file >> s.speed))     break;
-            if (!(file >> s.delay))     break;
-            s.step_num = (uint64_t)m_stepsModel->rowCount();
-            m_stepsModel->addStep(s);
-            m_automatic_steps->push_back(s);
+        const auto path = m_scripted_motion_files_path / item->text().toStdString();
+        if (auto res = m_odin_steps_io_handler.loadSteps(path, *m_automatic_steps, false); res)
+        {
+            for (auto & step : *m_automatic_steps)
+            {
+                step.step_num = static_cast<uint64_t>(m_stepsModel->rowCount());
+                m_stepsModel->addStep(step);
+            }
         }
-    } catch (const std::exception& e) { std::cout << e.what() << std::endl; }
+        else
+        {
+            std::cout << "[OdinGui][load] " << m_odin_steps_io_handler.toString(res.error) << ": " << res.message << "\n";
+            QMessageBox::warning(this, "Load failed", QString::fromStdString(res.message));
+        }
+    } 
+    catch (const std::exception& e)
+    { 
+        std::cout << e.what() << std::endl;
+    }
 }
 
 void MainWindow::scan_automatic_files()
@@ -636,46 +688,105 @@ void MainWindow::handleMotionCompleted()
     ui->button_execute->setEnabled(true);
 }
 
-void MainWindow::onFrame(const QImage& img)
+void MainWindow::onFrame(const QImage & img)
 {
     if (m_mode != UIMode::CAMERA) return;
-
     if (m_uiTimer.elapsed() < m_uiMinIntervalMs) return;
     m_uiTimer.restart();
-
     if (img.isNull()) return;
 
-    // display clean frame immediately
-    QImage frame = (img.format() == QImage::Format_RGB888)
-                     ? img
-                     : img.convertToFormat(QImage::Format_RGB888);
+    // image copies
+    QImage work = img;
+    QImage display = img;
 
-    // paint last known bbox
-    if (m_haveFaceQt)
+    // m_face_bbox draw
+    if (m_haveFaceQt && m_face_bbox.isValid() && !m_face_bbox.isEmpty())
     {
-        QPainter p(&frame);
+        QPainter p(&display);
         p.setRenderHint(QPainter::Antialiasing, true);
         QPen pen(QColor(0, 200, 0)); pen.setWidth(3);
         p.setPen(pen);
-        p.drawRect(m_lastFaceQt);
+        p.drawRect(m_face_bbox);
     }
 
-    // async detection, only when worker is free
-    if (m_CvWorker && !m_faceBusy)
+    // m_roi_hint draw
+    {
+        QPainter p(&display);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        QPen pen(QColor(200, 0, 0)); pen.setWidth(3);
+        p.setPen(pen);
+        if (m_roi_hint.isValid() && !m_roi_hint.isEmpty())
+            p.drawRect(m_roi_hint);
+    }
+
+    m_camera_pos_ready_shmem_handler->shmemRead(&m_camera_pos_ready_data);
+
+    if (m_camera_pos_ready_data.camera_pos_ready &&
+        m_camera_move_done &&
+        !m_afterTargetBlock &&
+        (!m_needFreshDetection || !m_haveFaceQt))
+    {
+        m_camera_move_done = false;
+
+        m_camera_pos_data = computeCameraPosData(
+            img.width(),
+            img.height(),
+            (m_haveFaceQt && m_face_bbox.isValid()) ? m_face_bbox : QRect(),
+            m_camera_pos_ready_data.pan_pos.position,
+            m_camera_pos_ready_data.tilt_pos.position
+        );
+
+        if (m_camera_pos_data.pan_pos.position  < MIN_CAM_PAN_POS_VAL)  m_camera_pos_data.pan_pos.position  = MIN_CAM_PAN_POS_VAL;
+        if (m_camera_pos_data.pan_pos.position  > MAX_CAM_PAN_POS_VAL)  m_camera_pos_data.pan_pos.position  = MAX_CAM_PAN_POS_VAL;
+        if (m_camera_pos_data.tilt_pos.position < MIN_CAM_TILT_POS_VAL) m_camera_pos_data.tilt_pos.position = MIN_CAM_TILT_POS_VAL;
+        if (m_camera_pos_data.tilt_pos.position > MAX_CAM_TILT_POS_VAL) m_camera_pos_data.tilt_pos.position = MAX_CAM_TILT_POS_VAL;
+
+        m_camera_pos_shmem_handler->shmemWrite(&m_camera_pos_data);
+        m_needFreshDetection = m_haveFaceQt;
+    }
+
+    if (m_camera_pos_ready_data.camera_pos_ready &&
+        m_camera_pos_ready_data.pan_pos.position == m_camera_pos_data.pan_pos.position &&
+        m_camera_pos_ready_data.tilt_pos.position == m_camera_pos_data.tilt_pos.position)
+    {
+        m_camera_move_done = true;
+        m_afterTargetBlock = true;
+        QTimer::singleShot(m_afterTargetDelayMs, this,
+            [this]
+            {
+                m_afterTargetBlock = false;
+            }
+        );
+
+        if (m_haveFaceQt && m_face_bbox.isValid() && !m_face_bbox.isEmpty())
+        {
+            m_roi_hint = makeAdaptiveTargetRect(img.width(), img.height(), m_face_bbox);
+        }
+        else
+        {
+            m_roi_hint = QRect();
+        }
+    }
+
+    // asynchronous detection
+    if (m_CvWorker &&
+        !m_faceBusy &&
+        m_camera_move_done)
     {
         m_faceBusy = true;
-        const bool forceFull = (m_fullDetectTimer.elapsed() >= m_fullDetectMs) || !m_haveFaceQt;
-        if (forceFull) m_fullDetectTimer.restart();
+        const QRect roiForNext = (m_roi_hint.isValid() && !m_roi_hint.isEmpty())
+                               ? m_roi_hint
+                               : QRect();
 
-        // process in worker thread
-        QMetaObject::invokeMethod(m_CvWorker, "process",
-                                  Qt::QueuedConnection,
-                                  Q_ARG(QImage, frame),
-                                  Q_ARG(bool, forceFull));
+        QMetaObject::invokeMethod(
+            m_CvWorker, "process", Qt::QueuedConnection,
+            Q_ARG(QImage, work),
+            Q_ARG(QRect, roiForNext)
+        );
     }
 
-    // send to label
-    const QPixmap pm = QPixmap::fromImage(frame).scaled(
+    // image display
+    const QPixmap pm = QPixmap::fromImage(display).scaled(
         ui->camera_label->size(),
         Qt::KeepAspectRatio,
         Qt::FastTransformation);

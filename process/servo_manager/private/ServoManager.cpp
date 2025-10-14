@@ -36,11 +36,23 @@ ServoManager::ServoManager() :
         odin::shmem_wrapper::DataTypes::LED_SHMEM_NAME, sizeof(m_led_color_status), false);
     m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>>(
         odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), false);
+    m_camera_pos_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<CameraPosData>>(
+        odin::shmem_wrapper::DataTypes::CAMERA_POSITION_SHMEM_NAME, sizeof(CameraPosData), false);
+    m_camera_pos_ready_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<CameraPosReadyData>>(
+        odin::shmem_wrapper::DataTypes::CAMERA_POSITION_READY_SHMEM_NAME, sizeof(CameraPosReadyData), false);
     m_previous_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    // TODO: Check if openShmem is still needed after last changes
     if (m_led_shmem_handler->openShmem())
     {
         updateLedColors(LedOption::IDLE);
+    }
+    m_camera_pos_ready_data.camera_pos_ready = true;
+    m_camera_pos_ready_data.pan_pos = m_servo_controller.getServoPosition(SERVO_CAMERA_PAN);
+    m_camera_pos_ready_data.tilt_pos = m_servo_controller.getServoPosition(SERVO_CAMERA_TILT);
+    if (!m_camera_pos_ready_shmem_handler->shmemWrite(&m_camera_pos_ready_data))
+    {
+        std::cout << "Coudln't write startup message to m_camera_pos_ready_shmem_handler" << std::endl;
     }
 }
 
@@ -67,6 +79,10 @@ void ServoManager::servoDataReader()
                             updateLedColors(LedOption::AUTOMATIC_READY);
                             std::cout << "AUTOMATIC." << std::endl;
                             break;
+                        case static_cast<std::uint8_t>(ControlSelection::CAMERA):
+                            updateLedColors(LedOption::CAMERA);
+                            std::cout << "CAMERA." << std::endl;
+                            break;
                         default:
                             updateLedColors(LedOption::IDLE);
                             std::cout << "NONE." << std::endl;
@@ -89,6 +105,10 @@ void ServoManager::servoDataReader()
                     m_current_step_index = 0;
                     m_stop_requested = false;
                     handleAutomaticData();
+                }
+                else if (m_control_selection.control_selection == static_cast<std::uint8_t>(ControlSelection::CAMERA))
+                {
+                    handleCameraMovement();
                 }
                 else
                 {
@@ -253,58 +273,6 @@ void ServoManager::praseJoypadData()
     }
 }
 
-void ServoManager::updateLedColors(std::uint8_t led_options)
-{
-    switch(led_options)
-    {
-        case LedOption::JOYPAD:
-            for (int i = 0; i < led_handler::LED_COUNT; ++i)
-            {
-                m_led_color_status[i] = led_handler::LED_COLOR_NONE;
-            }
-            m_led_color_status[m_current_servo_l] = led_handler::LED_COLOR_ORANGE;
-            m_led_color_status[m_current_servo_r] = led_handler::LED_COLOR_PINK;
-
-            m_led_shmem_handler->shmemWrite(m_led_color_status);
-            break;
-        case LedOption::AUTOMATIC_READY:
-            for (int i = 0; i < led_handler::LED_COUNT; ++i)
-            {
-                m_led_color_status[i] = led_handler::LED_COLOR_ORANGE;
-            }
-            m_led_shmem_handler->shmemWrite(m_led_color_status);
-            break;
-        case LedOption::AUTOAMTIC_EXECUTE:
-            for (int i = 0; i < led_handler::LED_COUNT; ++i)
-            {
-                m_led_color_status[i] = led_handler::LED_COLOR_GREEN;
-            }
-            m_led_shmem_handler->shmemWrite(m_led_color_status);
-            break;
-        case LedOption::ERROR:
-            for (int i = 0; i < led_handler::LED_COUNT; ++i)
-            {
-                m_led_color_status[i] = led_handler::LED_COLOR_RED;
-            }
-            m_led_shmem_handler->shmemWrite(m_led_color_status);
-            break;
-        case LedOption::IDLE:
-            for (int i = 0; i < led_handler::LED_COUNT; ++i)
-            {
-                m_led_color_status[i] = led_handler::LED_COLOR_LIGHTBLUE;
-            }
-            m_led_shmem_handler->shmemWrite(m_led_color_status);
-            break;
-        default:
-            for (int i = 0; i < led_handler::LED_COUNT; ++i)
-            {
-                m_led_color_status[i] = led_handler::LED_COLOR_NONE;
-            }
-            m_led_shmem_handler->shmemWrite(m_led_color_status);
-            break;
-    }
-}
-
 void ServoManager::handleAutomaticData()
 {
     while(!m_stop_requested)
@@ -380,6 +348,89 @@ void ServoManager::handleAutomaticData()
             std::cout << "Cannot open scripted motion SHMEM..." << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+    }
+}
+
+void ServoManager::handleCameraMovement()
+{
+    m_camera_pos_shmem_handler->shmemRead(&m_campera_pos_data);
+    if (m_campera_pos_data.pan_pos.servo_num != SERVO_CAMERA_PAN && m_campera_pos_data.tilt_pos.servo_num != SERVO_CAMERA_TILT) return;
+    if (m_campera_pos_data.pan_pos.position == m_servo_controller.getServoPosition(SERVO_CAMERA_PAN).position &&
+        m_campera_pos_data.tilt_pos.position == m_servo_controller.getServoPosition(SERVO_CAMERA_TILT).position) return;
+
+    m_camera_pos_ready_data.pan_pos = m_servo_controller.getServoPosition(SERVO_CAMERA_PAN);
+    m_camera_pos_ready_data.tilt_pos = m_servo_controller.getServoPosition(SERVO_CAMERA_TILT);
+    m_camera_pos_ready_data.camera_pos_ready = false;
+    m_camera_pos_ready_shmem_handler->shmemWrite(&m_camera_pos_ready_data);
+
+    m_servo_controller.setAbsolutePosition(m_campera_pos_data.pan_pos.position, m_campera_pos_data.pan_pos.servo_num, m_campera_pos_data.pan_pos.speed);
+    m_servo_controller.setAbsolutePosition(m_campera_pos_data.tilt_pos.position, m_campera_pos_data.tilt_pos.servo_num, m_campera_pos_data.tilt_pos.speed);
+
+    m_camera_pos_ready_data.pan_pos = m_servo_controller.getServoPosition(SERVO_CAMERA_PAN);
+    m_camera_pos_ready_data.tilt_pos = m_servo_controller.getServoPosition(SERVO_CAMERA_TILT);
+    m_camera_pos_ready_data.camera_pos_ready = true;
+    m_camera_pos_ready_shmem_handler->shmemWrite(&m_camera_pos_ready_data);
+    std::cout << "CAM move done" << std::endl;
+}
+
+
+// TODO: Move to led library
+void ServoManager::updateLedColors(std::uint8_t led_options)
+{
+    switch(led_options)
+    {
+        case LedOption::JOYPAD:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_NONE;
+            }
+            m_led_color_status[m_current_servo_l] = led_handler::LED_COLOR_ORANGE;
+            m_led_color_status[m_current_servo_r] = led_handler::LED_COLOR_PINK;
+
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+        case LedOption::AUTOMATIC_READY:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_ORANGE;
+            }
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+        case LedOption::AUTOAMTIC_EXECUTE:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_GREEN;
+            }
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+        case LedOption::CAMERA:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_YELLOW;
+            }
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+        case LedOption::ERROR:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_RED;
+            }
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+        case LedOption::IDLE:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_LIGHTBLUE;
+            }
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
+        default:
+            for (int i = 0; i < led_handler::LED_COUNT; ++i)
+            {
+                m_led_color_status[i] = led_handler::LED_COLOR_NONE;
+            }
+            m_led_shmem_handler->shmemWrite(m_led_color_status);
+            break;
     }
 }
 

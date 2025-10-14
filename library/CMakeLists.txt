@@ -1,8 +1,8 @@
-# add_subdirectory(ultrasonic_sensor)
-add_subdirectory(joypad)
-add_subdirectory(shmem_handler)
-add_subdirectory(inet_comm_handler)
 add_subdirectory(diagnostic_handler)
+add_subdirectory(inet_comm_handler)
+add_subdirectory(joypad)
+add_subdirectory(odin_steps_io_handler)
+add_subdirectory(shmem_handler)
 add_subdirectory(video_handler)
 
 if (BUILD_ARM)

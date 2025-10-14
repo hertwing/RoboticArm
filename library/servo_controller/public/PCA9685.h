@@ -9,7 +9,7 @@
 
 // ===== PCA9685 register map =====
 namespace {
-constexpr uint8_t PCA9685_ADDR   = 0x40;
+constexpr uint8_t PCA9685_ADDR   = 0x42;
 constexpr uint8_t MODE1          = 0x00;
 constexpr uint8_t MODE2          = 0x01;
 constexpr uint8_t SUBADR1        = 0x02;
@@ -35,12 +35,15 @@ constexpr uint8_t OCH     = 0x08; // update on ACK
 constexpr double OSC_FREQ_HZ = 25'000'000.0;
 
 // I2C write
-bool write8(int fd, uint8_t reg, uint8_t val) {
+bool write8(int fd, uint8_t reg, uint8_t val)
+{
     uint8_t buf[2] = {reg, val};
     return ::write(fd, buf, 2) == 2;
 }
 
-bool read8(int fd, uint8_t reg, uint8_t &val) {
+// I2C read
+bool read8(int fd, uint8_t reg, uint8_t &val)
+{
     if (::write(fd, &reg, 1) != 1) return false;
     uint8_t b{};
     if (::read(fd, &b, 1) != 1) return false;
@@ -48,7 +51,8 @@ bool read8(int fd, uint8_t reg, uint8_t &val) {
     return true;
 }
 
-bool write4(int fd, uint8_t reg, uint16_t on, uint16_t off) {
+bool write4(int fd, uint8_t reg, uint16_t on, uint16_t off)
+{
     // Little-endian for registers: ON_L, ON_H, OFF_L, OFF_H
     uint8_t buf[5] = {
         reg,
@@ -60,31 +64,37 @@ bool write4(int fd, uint8_t reg, uint16_t on, uint16_t off) {
     return ::write(fd, buf, 5) == 5;
 }
 
-bool setTick(int fd, uint8_t channel, uint16_t tick) {
+bool setTick(int fd, uint8_t channel, uint16_t tick)
+{
+    tick = std::min<uint16_t>(tick, MAX_PWM);
     if (channel > 15) return false;
     uint8_t base = LED0_ON_L + 4 * channel;
     // Set ON=0 (cycle begin), OFF=tick
     return write4(fd, base, 0, tick);
 }
 
-bool allOff(int fd) {
+bool allOff(int fd)
+{
     // All channels: ON=0, OFF=0, output in low state
     return write4(fd, ALL_LED_ON_L, 0, 0);
 }
 
-double calc_real_freq_from_prescale(uint8_t prescale) {
+double calc_real_freq_from_prescale(uint8_t prescale)
+{
     // f = OSC / (4096 * (prescale + 1))
     return OSC_FREQ_HZ / (4096.0 * (static_cast<double>(prescale) + 1.0));
 }
 
-bool read_mode_regs(int fd, uint8_t& mode1, uint8_t& mode2, uint8_t& prescale) {
+bool read_mode_regs(int fd, uint8_t& mode1, uint8_t& mode2, uint8_t& prescale)
+{
     if (!read8(fd, MODE1, mode1)) return false;
     if (!read8(fd, MODE2, mode2)) return false;
     if (!read8(fd, PRESCALE, prescale)) return false;
     return true;
 }
 
-void print_pca_report(int fd, int target_hz, double tol_pct = 10.0) {
+void print_pca_report(int fd, int target_hz, double tol_pct = 10.0)
+{
     uint8_t m1{}, m2{}, ps{};
     if (!read_mode_regs(fd, m1, m2, ps)) {
         fprintf(stderr, "[PCA9685] read regs failed\n");
@@ -106,23 +116,28 @@ void print_pca_report(int fd, int target_hz, double tol_pct = 10.0) {
     printf("[PCA9685] AI=%d  SLEEP=%d  RESTART=%d  OUTDRV=%d  OCH=%d\n",
            ai, sleep, restart, outdrv, och);
 
-    if (sleep) {
-        printf("[PCA9685][WARN] SLEEP=1 po konfiguracji — nie powinno.\n");
+    if (sleep)
+    {
+        printf("[PCA9685][WARN] SLEEP=1\n");
     }
-    if (!ai) {
-        printf("[PCA9685][WARN] AI=0 — warto mieć Auto-Increment=1.\n");
+    if (!ai)
+    {
+        printf("[PCA9685][WARN] AI=0\n");
     }
-    if (!outdrv) {
-        printf("[PCA9685][WARN] MODE2.OUTDRV=0 — zalecany totem-pole (OUTDRV=1).\n");
+    if (!outdrv)
+    {
+        printf("[PCA9685][WARN] MODE2.OUTDRV=0\n");
     }
 
     const double tol = std::max(0.5, tol_pct);
-    if (std::fabs(err_pct) > tol) {
-        printf("[PCA9685][WARN] Odchyłka częstotliwości > %.1f%% — sprawdź PRESCALE/oscylator.\n", tol);
+    if (std::fabs(err_pct) > tol)
+    {
+        printf("[PCA9685][WARN] Frequency deviation > %.1f%% — check PRESCALE/oscillator.\n", tol);
     }
 }
 
-bool setPWMFreq(int fd, int hertz) {
+bool setPWMFreq(int fd, int hertz)
+{
     double prescale_f = (OSC_FREQ_HZ / (4096.0 * static_cast<double>(hertz))) - 1.0;
     uint8_t prescale = static_cast<uint8_t>(std::round(prescale_f));
 

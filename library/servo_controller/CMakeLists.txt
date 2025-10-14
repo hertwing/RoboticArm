@@ -15,7 +15,8 @@ add_library(library_${PROJECT_NAME}
     )
 
 target_link_libraries(library_${PROJECT_NAME}
-    PRIVATE pthread
+    PUBLIC pthread
+    PUBLIC library_inet_data
     )
 
 target_include_directories(library_${PROJECT_NAME}

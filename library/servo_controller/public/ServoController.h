@@ -1,7 +1,10 @@
 #ifndef SERVOCONTROLLER_H
 #define SERVOCONTROLLER_H
 
+#include <chrono>
 #include <cstdint>
+
+#include "InetCommData.h"
 
 static constexpr std::uint16_t PIN_BASE = 300;
 static constexpr std::uint16_t MAX_PWM = 4095;
@@ -11,13 +14,15 @@ static constexpr std::uint8_t SERVO_NUM = 8;
 static constexpr std::uint16_t MIDDLE_POS_VAL = 1500;
 static constexpr std::uint16_t MIN_POS_VAL = 500;
 static constexpr std::uint16_t MAX_POS_VAL = 2500;
-// static constexpr std::uint16_t MIN_CAM_POS_VAL = 0;
-// static constexpr std::uint16_t MAX_CAM_POS_VAL = 3000;
-static constexpr std::uint16_t MIN_CAM_1_POS_VAL = 500;
-static constexpr std::uint16_t MAX_CAM_1_POS_VAL = 2500;
+static constexpr std::uint16_t MIN_CAM_PAN_POS_VAL = 500;
+static constexpr std::uint16_t MAX_CAM_PAN_POS_VAL = 2500;
+static constexpr std::uint16_t MIN_CAM_TILT_POS_VAL = 800;
+static constexpr std::uint16_t MAX_CAM_TILT_POS_VAL = 2200;
+// static constexpr std::uint16_t MIN_CAM_PAN_POS_VAL = 500;
+// static constexpr std::uint16_t MAX_CAM_PAN_POS_VAL = 2500;
 
-static constexpr std::uint16_t SERVO_1_MIN_POS_VAL = 1350;
-static constexpr std::uint16_t SERVO_1_MAX_POS_VAL = 2300;
+static constexpr std::uint16_t SERVO_1_MIN_POS_VAL = 1400;
+static constexpr std::uint16_t SERVO_1_MAX_POS_VAL = 2200;
 static constexpr std::uint16_t GRIPPER_MIN_POS_VAL = 780;
 static constexpr std::uint16_t GRIPPER_MAX_POS_VAL = 2300;
 
@@ -28,8 +33,8 @@ static constexpr std::uint16_t STARTUP_POS_SERVO_3 = 2400;
 static constexpr std::uint16_t STARTUP_POS_SERVO_4 = 1500;
 static constexpr std::uint16_t STARTUP_POS_SERVO_5 = 1500;
 
-static constexpr std::uint16_t STARTUP_POS_CAMERA_SERVO_1 = 1580;
-static constexpr std::uint16_t STARTUP_POS_CAMERA_SERVO_2 = 1500;
+static constexpr std::uint16_t STARTUP_POS_CAMERA_SERVO_PAN = 1520;
+static constexpr std::uint16_t STARTUP_POS_CAMERA_SERVO_TILT = 1500;
 
 const std::uint16_t STARTUP_POSITIONS[SERVO_NUM] = 
 {
@@ -39,19 +44,19 @@ const std::uint16_t STARTUP_POSITIONS[SERVO_NUM] =
     STARTUP_POS_SERVO_3,
     STARTUP_POS_SERVO_4,
     STARTUP_POS_SERVO_5,
-    STARTUP_POS_CAMERA_SERVO_1,
-    STARTUP_POS_CAMERA_SERVO_2
+    STARTUP_POS_CAMERA_SERVO_PAN,
+    STARTUP_POS_CAMERA_SERVO_TILT
 };
 
 static constexpr std::uint16_t MIDDLE_POS_SERVO_0 = 1500;
-static constexpr std::uint16_t MIDDLE_POS_SERVO_1 = 1575;
-static constexpr std::uint16_t MIDDLE_POS_SERVO_2 = 1630;
+static constexpr std::uint16_t MIDDLE_POS_SERVO_1 = 1850;
+static constexpr std::uint16_t MIDDLE_POS_SERVO_2 = 1670;
 static constexpr std::uint16_t MIDDLE_POS_SERVO_3 = 1480;
 static constexpr std::uint16_t MIDDLE_POS_SERVO_4 = 1500;
 static constexpr std::uint16_t MIDDLE_POS_SERVO_5 = 1500;
 
-static constexpr std::uint16_t MIDDLE_POS_CAMERA_SERVO_1 = 1580;
-static constexpr std::uint16_t MIDDLE_POS_CAMERA_SERVO_2 = 1500;
+static constexpr std::uint16_t MIDDLE_POS_CAMERA_SERVO_PAN = 1520;
+static constexpr std::uint16_t MIDDLE_POS_CAMERA_SERVO_TILT = 1500;
 
 static constexpr std::uint8_t SERVO_BASE = 0;
 static constexpr std::uint8_t SERVO_ARM_1 = 1;
@@ -59,8 +64,8 @@ static constexpr std::uint8_t SERVO_ARM_2 = 2;
 static constexpr std::uint8_t SERVO_ARM_3 = 3;
 static constexpr std::uint8_t SERVO_ARM_4 = 4;
 static constexpr std::uint8_t SERVO_GRIPPER = 5;
-static constexpr std::uint8_t SERVO_CAMERA_1 = 6;
-static constexpr std::uint8_t SERVO_CAMERA_2 = 7;
+static constexpr std::uint8_t SERVO_CAMERA_PAN = 6;
+static constexpr std::uint8_t SERVO_CAMERA_TILT = 7;
 
 constexpr auto FRAME = std::chrono::milliseconds(20);   // ~50 Hz
 constexpr uint16_t EPS_US = 2;                          // deadband for small changes
@@ -95,8 +100,9 @@ public:
     void cameraMoveUp(std::uint8_t servo_num, std::uint8_t value);
     void cameraMoveDown(std::uint8_t servo_num, std::uint8_t value);
     void cameraMoveTest();
+    OdinServoStep getServoPosition(std::uint8_t servo_num);
 private:
-    int calcTicks(float impulseMs, int hertz);
+    std::uint16_t calcTicks(double impulseMs);
 
     void setStartupPosition();
     std::uint8_t calculatePosition(std::uint8_t value, std::uint8_t max_step) const;

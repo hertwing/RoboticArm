@@ -1,13 +1,11 @@
-project(joypad_handler)
+project(odin_steps_io_handler)
 
 set(HEADERS
-    public/JoypadData.h
-    public/JoypadHandler.h
+    public/odin/odin_steps_io_handler/OdinStepsIOHandler.h
     )
 
 set(SOURCES
-    private/JoypadData.cpp
-    private/JoypadHandler.cpp
+    private/OdinStepsIOHandler.cpp
     )
 
 add_library(library_${PROJECT_NAME}
@@ -21,7 +19,5 @@ target_include_directories(library_${PROJECT_NAME}
 
 target_link_libraries(library_${PROJECT_NAME}
     PUBLIC stdc++fs
-    PUBLIC library_shmem_handler
-    PUBLIC rt
-    PUBLIC pthread
+    PUBLIC library_inet_data
     )

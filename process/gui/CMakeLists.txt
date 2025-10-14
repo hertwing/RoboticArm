@@ -13,7 +13,7 @@ set(QT_DEBUG_FIND_PACKAGE ON)
 
 find_package(QT NAMES Qt6 REQUIRED COMPONENTS Widgets Charts)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Charts)
-find_package(OpenCV REQUIRED COMPONENTS core imgproc objdetect)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc objdetect tracking)
 
 set(HEADERS
     mainwindow.h
@@ -70,8 +70,12 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
     PRIVATE Qt${QT_VERSION_MAJOR}::Widgets
     PRIVATE Qt${QT_VERSION_MAJOR}::Charts
-    PRIVATE library_shmem_handler
+    # TODO: MOVE LATER:
+    PRIVATE library_servo_controller
+    #
     PRIVATE library_diagnostic_handler
+    PRIVATE library_odin_steps_io_handler
+    PRIVATE library_shmem_handler
     PRIVATE library_tcp_handler
     PRIVATE library_udp_handler
     PRIVATE library_video_handler
@@ -86,6 +90,8 @@ if(${QT_VERSION} VERSION_LESS 6.1.0)
 endif()
 set_target_properties(${PROJECT_NAME} PROPERTIES
     ${BUNDLE_ID_OPTION}
+    BUILD_RPATH "/usr/local/lib"
+    INSTALL_RPATH "/usr/local/lib"
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
     MACOSX_BUNDLE TRUE

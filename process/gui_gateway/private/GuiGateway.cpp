@@ -52,9 +52,12 @@ void GuiGateway::runOnGui()
     m_control_selection_thread = std::thread(handleGuiControlSelection, this);
     std::cout << "Starting scripted motion request thread." << std::endl;
     m_scripted_motion_request_thread = std::thread(handleGuiScriptedMotionRequest, this);
+    std::cout << "Starting camera position thread." << std::endl;
+    m_camera_pos_thread = std::thread(handleGuiCameraPos, this);
     m_diagnostic_thread.join();
     m_control_selection_thread.join();
     m_scripted_motion_request_thread.join();
+    m_camera_pos_thread.join();
 }
 
 void GuiGateway::runOnArm()
@@ -66,9 +69,12 @@ void GuiGateway::runOnArm()
     m_control_selection_thread = std::thread(handleArmControlSelection, this);
     std::cout << "Starting automatic data thread." << std::endl;
     m_scripted_motion_request_thread = std::thread(handleArmScriptedMotionRequest, this);
+    std::cout << "Starting camera position thread." << std::endl;
+    m_camera_pos_thread = std::thread(handleArmCameraPos, this);
     m_diagnostic_thread.join();
     m_control_selection_thread.join();
     m_scripted_motion_request_thread.join();
+    m_camera_pos_thread.join();
 }
 
 void GuiGateway::handleGuiDiagnostic(GuiGateway * gg)
@@ -523,6 +529,98 @@ void GuiGateway::handleArmScriptedMotionRequest(GuiGateway * gg)
                 break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+}
+
+void GuiGateway::handleGuiCameraPos(GuiGateway * gg)
+{
+    gg->m_camera_pos_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<CameraPosData>>(
+        odin::shmem_wrapper::DataTypes::CAMERA_POSITION_SHMEM_NAME, sizeof(CameraPosData), false);
+    gg->m_camera_pos_ready_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<CameraPosReadyData>>(
+        odin::shmem_wrapper::DataTypes::CAMERA_POSITION_READY_SHMEM_NAME, sizeof(CameraPosReadyData), false);
+    gg->m_camera_pos_inet_handler = std::make_unique<UdpHandler<CameraPosData>>(
+        sizeof(CameraPosData), CAMERA_POS_PORT, ROBOTIC_ARM_IP);
+    gg->m_camera_pos_inet_handler->set_send_buffer_bytes(UDP_BUFF);
+    gg->m_camera_pos_ready_inet_handler = std::make_unique<TcpHandler<CameraPosReadyData>>(
+        sizeof(CameraPosReadyData), CAMERA_POS_READY_PORT);
+    CameraPosData cam_pos;
+    CameraPosData cam_pos_old;
+    CameraPosReadyData camera_pos_ready_data;
+    while (gg->m_run_process)
+    {
+        if (gg->m_camera_pos_ready_inet_handler->serverRead(&camera_pos_ready_data) < 0)
+        {
+            // std::cout << "[GUI GATEWAY] Error: Couldn't read camera position ready data from ARM." << std::endl;
+            continue;
+        }
+        gg->m_camera_pos_ready_shmem_handler->shmemWrite(&camera_pos_ready_data);
+        if (camera_pos_ready_data.camera_pos_ready)
+        {
+            if (!gg->m_camera_pos_shmem_handler->shmemRead(&cam_pos))
+            {
+                std::cout << "[GUI GATEWAY] Error: Couldn't read camera position data from SHMEM." << std::endl;
+                continue;
+            }
+            if (cam_pos_old != cam_pos)
+            {
+                std::cout << "CAM POS GUI: " << +cam_pos.pan_pos.servo_num << " " << +cam_pos.pan_pos.position << std::endl;
+                cam_pos_old = cam_pos;
+                if (!gg->m_camera_pos_inet_handler->write(&cam_pos))
+                {
+                    std::cout << "[GUI GATEWAY] Error: Couldn't write camera position data to ARM." << std::endl;
+                    continue;
+                }
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+}
+
+void GuiGateway::handleArmCameraPos(GuiGateway * gg)
+{
+    gg->m_camera_pos_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<CameraPosData>>(
+        odin::shmem_wrapper::DataTypes::CAMERA_POSITION_SHMEM_NAME, sizeof(CameraPosData), true);
+    gg->m_camera_pos_ready_shmem_handler= std::make_unique<odin::shmem_wrapper::ShmemHandler<CameraPosReadyData>>(
+        odin::shmem_wrapper::DataTypes::CAMERA_POSITION_READY_SHMEM_NAME, sizeof(CameraPosReadyData), true);
+    gg->m_camera_pos_inet_handler = std::make_unique<UdpHandler<CameraPosData>>(
+        sizeof(CameraPosData), CAMERA_POS_PORT);
+    gg->m_camera_pos_ready_inet_handler = std::make_unique<TcpHandler<CameraPosReadyData>>(
+        sizeof(CameraPosReadyData), CAMERA_POS_READY_PORT, ROBOTIC_GUI_IP);
+    gg->m_camera_pos_inet_handler->set_recv_buffer_bytes(UDP_BUFF);
+    CameraPosData cam_pos;
+    CameraPosData cam_pos_old;
+    CameraPosReadyData camera_pos_ready_data;
+    while (gg->m_run_process)
+    {
+        if (!gg->m_camera_pos_ready_shmem_handler->shmemRead(&camera_pos_ready_data))
+        {
+            std::cout << "[GUI GATEWAY] Error: Couldn't read camera position ready data from SHMEM." << std::endl;
+            continue;
+        }
+        if (!gg->m_camera_pos_ready_inet_handler->clientWrite(&camera_pos_ready_data))
+        {
+            // std::cout << "[GUI GATEWAY] Error: Couldn't write camera position ready data to GUI." << std::endl;
+            continue;
+        }
+        if (camera_pos_ready_data.camera_pos_ready)
+        {
+            if (gg->m_camera_pos_inet_handler->read(&cam_pos) < 0)
+            {
+                std::cout << "[GUI GATEWAY] Error: Couldn't read camera position from GUI." << std::endl;
+                continue;
+            }
+            if (cam_pos_old != cam_pos)
+            {
+                std::cout << "CAM POS ARM: " << +cam_pos.pan_pos.servo_num << " " << +cam_pos.pan_pos.position << std::endl;
+                cam_pos_old = cam_pos;
+                if (!gg->m_camera_pos_shmem_handler->shmemWrite(&cam_pos))
+                {
+                    std::cout << "[GUI GATEWAY] Error: Couldn't write camera position data to SHMEM." << std::endl;
+                    break;
+                }
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
 }
 

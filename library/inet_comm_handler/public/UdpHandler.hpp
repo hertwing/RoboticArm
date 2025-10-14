@@ -324,7 +324,6 @@ int UdpHandler<T>::select_with_deadline(int fd, bool want_read, bool want_write,
 }
 
 // ===== Fixed-size API =====
-
 template <typename T>
 std::int8_t UdpHandler<T>::read(T* buffer, int timeout_us)
 {

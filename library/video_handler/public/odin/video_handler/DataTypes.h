@@ -11,7 +11,7 @@ namespace video_handler
     static constexpr std::uint16_t VIDEO_WIDTH = 720;
     static constexpr std::uint16_t VIDEO_HEIGHT = 480;
     static constexpr std::uint8_t VIDEO_FPS = 30;
-    const std::string VIDEO_CODEC = "h264";
+    const std::string VIDEO_CODEC = "mjpeg";
     const std::string VIDEO_SRC = "auto";
 
     static constexpr int VIDEO_DSCP = 34;
@@ -39,8 +39,12 @@ namespace video_handler
         uint16_t width=0, height=0;
     };
 
-    static constexpr size_t MTU     = 1400;
+    static constexpr size_t MTU = 1400;
     static constexpr size_t MAX_PKT = sizeof(UdpMjpegHdr) + MTU;
+
+    static constexpr size_t PAYLOAD_BYTES = (MAX_PKT > sizeof(UdpMjpegHdr))
+                                          ? (MAX_PKT - sizeof(UdpMjpegHdr))
+                                          : 0;
 } // video_handler
 } // odin
 

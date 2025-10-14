@@ -18,6 +18,8 @@ static constexpr std::uint16_t CONTROL_SELECTION_PORT = 7072;
 static constexpr std::uint16_t SCRIPTED_MOTION_REQUEST_PORT = 7073;
 static constexpr std::uint16_t SCRIPTED_MOTION_SERVO_DATA_PORT = 7074;
 static constexpr std::uint16_t VIDEO_PORT = 7075;
+static constexpr std::uint16_t CAMERA_POS_PORT = 7076;
+static constexpr std::uint16_t CAMERA_POS_READY_PORT = 7077;
 
 typedef std::uint8_t scripted_motion_status_t;
 
@@ -67,13 +69,16 @@ enum class ScriptedMotionReplyStatus
 
 struct OdinControlSelection
 {
+    std::uint8_t control_selection;
+
+    bool operator==(const OdinControlSelection & obj) const
+    {
+        return control_selection == obj.control_selection;
+    }
+
     bool operator!=(const OdinControlSelection & obj) const
     {
-        if (control_selection == obj.control_selection)
-        {
-            return false;
-        }
-        return true;
+        return !(*this==obj);
     }
 
     OdinControlSelection & operator=(const OdinControlSelection & obj)
@@ -81,10 +86,9 @@ struct OdinControlSelection
         control_selection = obj.control_selection;
         return *this;
     }
-
-    std::uint8_t control_selection;
 };
 
+// TODO: Move to different header 
 struct OdinServoStep
 {
     std::uint64_t step_num;
@@ -92,6 +96,81 @@ struct OdinServoStep
     std::uint16_t position;
     std::uint64_t delay;
     std::uint8_t speed;
+
+    OdinServoStep & operator=(const OdinServoStep & obj)
+    {
+        step_num = obj.step_num;
+        servo_num = obj.servo_num;
+        position = obj.position;
+        delay = obj.delay;
+        speed = obj.speed;
+        return *this;
+    }
+
+    bool operator==(const OdinServoStep & obj) const
+    {
+        return step_num == obj.step_num &&
+               servo_num == obj.servo_num &&
+               position == obj.position &&
+               delay == obj.delay &&
+               speed == obj.speed;
+    }
+
+    bool operator!=(const OdinServoStep & obj) const
+    {
+        return !(*this==obj);
+    }
+};
+
+struct CameraPosData
+{
+    OdinServoStep pan_pos;
+    OdinServoStep tilt_pos;
+
+    CameraPosData & operator=(const CameraPosData & obj)
+    {
+        pan_pos = obj.pan_pos;
+        tilt_pos = obj.tilt_pos;
+        return *this;
+    }
+
+    bool operator==(const CameraPosData & obj) const
+    {
+        return pan_pos == obj.pan_pos &&
+               tilt_pos == obj.tilt_pos;
+    }
+
+    bool operator!=(const CameraPosData & obj) const
+    {
+        return !(*this==obj);
+    }
+};
+
+struct CameraPosReadyData
+{
+    OdinServoStep pan_pos;
+    OdinServoStep tilt_pos;
+    bool camera_pos_ready = false;
+
+    CameraPosReadyData & operator=(const CameraPosReadyData & obj)
+    {
+        pan_pos = obj.pan_pos;
+        tilt_pos = obj.tilt_pos;
+        camera_pos_ready = obj.camera_pos_ready;
+        return *this;
+    }
+
+    bool operator==(const CameraPosReadyData & obj) const
+    {
+        return pan_pos == obj.pan_pos &&
+               tilt_pos == obj.tilt_pos &&
+               camera_pos_ready == obj.camera_pos_ready;
+    }
+
+    bool operator!=(const CameraPosReadyData & obj) const
+    {
+        return !(*this==obj);
+    }
 };
 
 struct ScriptedMotionStepData
@@ -99,5 +178,6 @@ struct ScriptedMotionStepData
     std::uint64_t step_num;
     ScriptedMotionStatus step_status;
 };
+
 
 #endif // INETCOMMDATA_H

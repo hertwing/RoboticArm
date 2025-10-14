@@ -21,6 +21,7 @@ enum LedOption
     JOYPAD,
     AUTOMATIC_READY,
     AUTOAMTIC_EXECUTE,
+    CAMERA,
     IDLE,
     ERROR
 };
@@ -64,6 +65,8 @@ private:
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>> m_scripted_motion_request_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>> m_scripted_motion_reply_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinServoStep>> m_scripted_motion_step_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<CameraPosData>> m_camera_pos_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<CameraPosReadyData>> m_camera_pos_ready_shmem_handler;
 
     // TODO: move those kind of values to some config file
     static constexpr int JOYPAD_CONTROL_DATA_BINS = 7;
@@ -80,10 +83,14 @@ private:
     ScriptedMotionStepData m_req_data{m_current_step_index, m_req_status};
     ScriptedMotionStepData m_rep_data{m_current_step_index, m_rep_status};
 
+    CameraPosData m_campera_pos_data;
+    CameraPosReadyData m_camera_pos_ready_data;
+
     bool m_log_phase = true;
 private:
     void praseJoypadData();
     void handleAutomaticData();
+    void handleCameraMovement();
     void updateLedColors(std::uint8_t led_options);
 };
 

@@ -3,28 +3,30 @@
 #ifndef Q_MOC_RUN
 #include "InetCommData.h"
 
-#include <arpa/inet.h>
-#include <endian.h>
-#include <sys/uio.h>
-#include <sys/socket.h>
-#include <errno.h>
-#include <time.h>
-
+#include <algorithm>
+#include <array>
 #include <chrono>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
-#include <array>
-#include <algorithm>
 #include <vector>
+
+#include <arpa/inet.h>
+#include <endian.h>
+#include <errno.h>
+#include <netinet/in.h>
+#include <sys/uio.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <time.h>
 #endif
 
 #include <QElapsedTimer>
 
 using namespace odin::video_handler;
 
-static constexpr int POLL_SLICE_US = 5000;
-
-static inline bool seq_less(uint32_t a, uint32_t b) {
+static inline bool seq_less(uint32_t a, uint32_t b)
+{
     return (int32_t)(a - b) < 0;
 }
 
@@ -33,16 +35,18 @@ static inline bool sane_frag_cnt(uint16_t n)
     return n > 0 && n <= 2048;
 }
 
-// ---- JpegWorker slot implementation (now top-level) ----
 void JpegWorker::decode(QByteArray data)
 {
-    #if defined(DEBUG)
+#if defined(DEBUG)
     auto t0 = std::chrono::steady_clock::now();
-    #endif
+#endif
     QImage img;
     (void)img.loadFromData(reinterpret_cast<const uchar*>(data.constData()),
                            data.size(), "JPG");
-    #if defined(DEBUG)
+    // Input format is RGB32 (640 x 480) - decode it to RGB888
+    if (img.format() != QImage::Format_RGB888)
+        img = img.convertToFormat(QImage::Format_RGB888);
+#if defined(DEBUG)
     auto t1 = std::chrono::steady_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
     static uint64_t cnt=0, sum=0; static int64_t maxms=0; ++cnt; sum+=ms; if(ms>maxms) maxms=ms;
@@ -51,16 +55,17 @@ void JpegWorker::decode(QByteArray data)
         std::cout << "[DEC] frames=" << cnt << " avg_ms=" << (sum*1.0/cnt)
                   << " max_ms=" << maxms << " last=" << ms << std::endl;
     }
-    #endif
+#endif
     emit decoded(img);
 }
 
 UdpMjpegReceiver::UdpMjpegReceiver(QObject* parent) :
     QObject(parent), m_rxBuf(MAX_PKT)
 {
-    m_udpRx = std::make_unique<UdpHandler<uint8_t>>(MAX_PKT, VIDEO_PORT);
+    m_udpRx = std::make_unique<UdpHandler<std::uint8_t>>(MAX_PKT, VIDEO_PORT);
     m_udpRx->set_recv_buffer_bytes(UDP_BUFF);
     m_udpRx->set_dscp(VIDEO_DSCP);
+    m_acc.reserve(256);
 
 #if defined(__linux__)
 {
@@ -70,18 +75,10 @@ UdpMjpegReceiver::UdpMjpegReceiver(QObject* parent) :
 }
 #endif
 
-    m_notifier = new QSocketNotifier(m_udpRx->native_fd(), QSocketNotifier::Read, this);
-    connect(m_notifier, &QSocketNotifier::activated, this, [this]{ pollUdp(); });
-
-    // less realocation with big frames
-    m_jpgScratch.reserve(JPEG_SCRATCH_RESERVE);
-
-    // start decode thread
     m_jpegThread = new QThread(this);
     m_jpegWorker = new JpegWorker();
     m_jpegWorker->moveToThread(m_jpegThread);
     connect(m_jpegThread, &QThread::finished, m_jpegWorker, &QObject::deleteLater);
-    // after docing emit frame to GUI
     connect(m_jpegWorker, &JpegWorker::decoded, this, [this](const QImage& img){
         m_decoderBusy.store(false, std::memory_order_relaxed);
         emit frameReady(img);
@@ -96,6 +93,47 @@ UdpMjpegReceiver::~UdpMjpegReceiver()
     {
         m_jpegThread->quit();
         m_jpegThread->wait();
+    }
+}
+
+void UdpMjpegReceiver::start()
+{
+    Q_ASSERT(thread() == QThread::currentThread());
+    if (!m_notifier) 
+    {
+        // pre-init for recvmmsg
+#if defined(__linux__)
+        if (m_batchBuf.size() < (size_t)BATCH * MAX_PKT)
+            m_batchBuf.resize((size_t)BATCH * MAX_PKT);
+        if ((int)m_msgs.size() < BATCH)
+        {
+            m_msgs.resize(BATCH);
+            m_iovec.resize(BATCH);
+            m_srcs.resize(BATCH);
+            for (int i=0; i<BATCH; ++i)
+            {
+                m_iovec[i].iov_base = nullptr;
+                m_iovec[i].iov_len  = MAX_PKT;
+                m_msgs[i].msg_hdr.msg_iov    = &m_iovec[i];
+                m_msgs[i].msg_hdr.msg_iovlen = 1;
+                m_msgs[i].msg_hdr.msg_name   = &m_srcs[i];
+                m_msgs[i].msg_hdr.msg_namelen= sizeof(sockaddr_in);
+            }
+        }
+#endif
+        m_notifier = new QSocketNotifier(m_udpRx->native_fd(), QSocketNotifier::Read, this);
+        connect(m_notifier, &QSocketNotifier::activated, this, [this]{ pollUdp(); });
+        m_notifier->setEnabled(true);
+    }
+}
+
+void UdpMjpegReceiver::stop()
+{
+    if (m_notifier) 
+    {
+        m_notifier->setEnabled(false);
+        m_notifier->deleteLater();
+        m_notifier = nullptr;
     }
 }
 
@@ -129,31 +167,6 @@ void UdpMjpegReceiver::pollUdp()
     if (!m_udpRx) return;
     m_notifier->setEnabled(false);
 
-    auto near_done = [&]()
-    {
-        for (const auto& kv : m_acc) 
-        {
-            const auto& A = kv.second;
-            if (A.frag_cnt >= 10 && (A.frag_cnt - A.received) <= 2) return true;
-        }
-        return false;
-    };
-
-    auto grace_1ms_if_needed = [&]()
-    {
-        static thread_local auto last_grace = std::chrono::steady_clock::now();
-        auto now = std::chrono::steady_clock::now();
-        if (near_done() && (now - last_grace) > std::chrono::milliseconds(5))
-        {
-            // 1 ms grace
-            struct timespec ts{0, 1'000'000};
-            nanosleep(&ts, nullptr);
-            last_grace = std::chrono::steady_clock::now();
-            return true;
-        }
-        return false;
-    };
-
     const auto call_t0 = std::chrono::steady_clock::now();
     const auto deadline = call_t0 + std::chrono::microseconds(POLL_SLICE_US);
     auto slice_time_exceeded = [&](){
@@ -162,48 +175,18 @@ void UdpMjpegReceiver::pollUdp()
 
     int processed = 0;
 #if defined(__linux__)
-    // ---- Fast-path: batch read via recvmmsg() ----
-
-    // Buffer (BATCH * MAX_PKT)
-    static thread_local std::vector<uint8_t> batchBuf;
-    if (batchBuf.size() < (size_t)BATCH * MAX_PKT)
-        batchBuf.resize((size_t)BATCH * MAX_PKT);
-
-    static thread_local std::vector<mmsghdr>     msgs;
-    static thread_local std::vector<iovec>       iov;
-    static thread_local std::vector<sockaddr_in> srcs;
-
-    if ((int)msgs.size() < BATCH)
+    // Fast-path: batch read via recvmmsg()
+    while (true)
     {
-        msgs.resize(BATCH);
-        iov.resize(BATCH);
-        srcs.resize(BATCH);
-    }
-
-    for (;;) 
-    {
-        if (slice_time_exceeded())
-        {
-            if (!grace_1ms_if_needed()) break;
-        }
         int want = std::min(BATCH, RX_BUDGET - processed);
         if (want <= 0) break;
 
-        // prepare structures
+        // set iov_base only (the rest was initiated in start())
         for (int i=0; i<want; ++i)
-        {
-            std::memset(&msgs[i], 0, sizeof(mmsghdr));
-            std::memset(&srcs[i], 0, sizeof(sockaddr_in));
-            iov[i].iov_base = batchBuf.data() + (size_t)i * MAX_PKT;
-            iov[i].iov_len  = MAX_PKT;
-            msgs[i].msg_hdr.msg_iov     = &iov[i];
-            msgs[i].msg_hdr.msg_iovlen  = 1;
-            msgs[i].msg_hdr.msg_name    = &srcs[i];
-            msgs[i].msg_hdr.msg_namelen = sizeof(sockaddr_in);
-        }
+            m_iovec[i].iov_base = m_batchBuf.data() + (size_t)i * MAX_PKT;
 
-        int nread = ::recvmmsg(m_udpRx->native_fd(), msgs.data(), want,
-                               MSG_DONTWAIT | MSG_TRUNC, nullptr);
+        int nread = ::recvmmsg(m_udpRx->native_fd(), m_msgs.data(), want,
+                               MSG_DONTWAIT, nullptr);
         if (nread < 0)
         {
             if (errno == EAGAIN || errno == EWOULDBLOCK) break;
@@ -215,12 +198,8 @@ void UdpMjpegReceiver::pollUdp()
 
         for (int i=0; i<nread; ++i) 
         {
-            if (slice_time_exceeded())
-            {
-                if (!grace_1ms_if_needed()) goto end_linux_loop;
-            }
-            const msghdr& mh = msgs[i].msg_hdr;
-            const ssize_t got = msgs[i].msg_len;
+            const msghdr& mh = m_msgs[i].msg_hdr;
+            const ssize_t got = m_msgs[i].msg_len;
             if (got <= 0) continue;
             if ((size_t)got < sizeof(UdpMjpegHdr))
             {
@@ -228,14 +207,14 @@ void UdpMjpegReceiver::pollUdp()
                 ++processed;
                 continue;
             }
-            if ((size_t)got > MAX_PKT || (mh.msg_flags & MSG_TRUNC))
+            if ((size_t)got > MAX_PKT)
             {
                 ++m_rxStats.incompleteFrames;
                 ++processed;
                 continue;
             }
 
-            const uint8_t* buf = static_cast<const uint8_t*>(iov[i].iov_base);
+            const uint8_t* buf = static_cast<const uint8_t*>(m_iovec[i].iov_base);
             const auto* hdr = reinterpret_cast<const UdpMjpegHdr*>(buf);
             if (ntohl(hdr->magic) != 0x4D4A5047) 
             {
@@ -247,9 +226,6 @@ void UdpMjpegReceiver::pollUdp()
             const uint32_t seq      = ntohl(hdr->seq);
             const uint16_t frag_idx = ntohs(hdr->frag_idx);
             const uint16_t frag_cnt = ntohs(hdr->frag_cnt);
-            const uint64_t ts_us    = be64toh(hdr->ts_us);
-            const uint16_t w        = ntohs(hdr->width);
-            const uint16_t h        = ntohs(hdr->height);
 
             if (!sane_frag_cnt(frag_cnt) || frag_idx >= frag_cnt) 
             {
@@ -268,14 +244,12 @@ void UdpMjpegReceiver::pollUdp()
             }
 
             auto it = m_acc.find(seq);
-            if (it == m_acc.end()) 
+            if (it == m_acc.end())
             {
                 FragAcc acc;
                 acc.frag_cnt = frag_cnt;
                 acc.data.resize((size_t)frag_cnt * MTU);
-                acc.frag_len.assign(frag_cnt, 0);
-                acc.got.assign(frag_cnt, false);
-                acc.ts_us = ts_us; acc.w = w; acc.h = h;
+                acc.frag.resize(frag_cnt, FragInfo{0,false});
                 acc.received = 0;
                 acc.start = std::chrono::steady_clock::now();
                 it = m_acc.emplace(seq, std::move(acc)).first;
@@ -288,14 +262,14 @@ void UdpMjpegReceiver::pollUdp()
                 continue; 
             }
 
-            if (!A.got[frag_idx]) 
+            if (!A.frag[frag_idx].got) 
             {
                 size_t off = (size_t)frag_idx * MTU;
                 if (off + payload_len <= A.data.size()) 
                 {
                     std::memcpy(A.data.data() + off, payload, payload_len);
-                    A.frag_len[frag_idx] = (uint16_t)payload_len;
-                    A.got[frag_idx] = true;
+                    A.frag[frag_idx].len = (uint16_t)payload_len;
+                    A.frag[frag_idx].got = true;
                     ++A.received;
                 }
             }
@@ -303,29 +277,29 @@ void UdpMjpegReceiver::pollUdp()
             if (A.received == A.frag_cnt)
             {
                 size_t total = 0;
-                for (uint16_t j=0; j<A.frag_cnt; ++j) total += A.frag_len[j];
-                if (m_jpgScratch.size() < total) m_jpgScratch.resize(total);
+                for (uint16_t j=0; j<A.frag_cnt; ++j) total += A.frag[j].len;
+                Q_ASSERT(total <= std::numeric_limits<int>::max());
+                QByteArray ba;
+                ba.resize((int)total);
                 int pos = 0;
                 for (uint16_t j=0; j<A.frag_cnt; ++j)
                 {
-                    size_t off = (size_t)j * MTU;
-                    int l = (int)A.frag_len[j];
-                    if (l > 0)
-                    { 
-                        std::memcpy(m_jpgScratch.data()+pos, A.data.data()+off, l); 
-                        pos += l; 
+                    const int len = (int)A.frag[j].len;
+                    if (len > 0)
+                    {
+                        std::memcpy(ba.data()+pos, A.data.data() + (size_t)j*MTU, len);
+                        pos += len;
                     }
                 }
-                #if defined(DEBUG)
+#if defined(DEBUG)
                 m_rxStats.note((uint32_t)pos, (uint32_t)A.frag_cnt);
-                #endif
+#endif
 
                 if (!m_decoderBusy.exchange(true, std::memory_order_relaxed))
                 {
-                    QByteArray ba(reinterpret_cast<const char*>(m_jpgScratch.data()), pos);
                     QMetaObject::invokeMethod(m_jpegWorker, "decode",
                                               Qt::QueuedConnection,
-                                              Q_ARG(QByteArray, ba));
+                                              Q_ARG(QByteArray, std::move(ba)));
                     m_lastDisplayedSeq = seq;
                 }
                 m_acc.erase(it);
@@ -337,12 +311,8 @@ void UdpMjpegReceiver::pollUdp()
     }
 end_linux_loop:
 #else
-    for (;;)
+    while (true)
     {
-        if (slice_time_exceeded())
-        {
-            if (!grace_1ms_if_needed()) break;
-        }
         size_t got = 0;
         std::int8_t rc = m_udpRx->read(m_rxBuf.data(), m_rxBuf.size(), got, 0);
         if (rc == 0) break;
@@ -363,9 +333,6 @@ end_linux_loop:
         const uint32_t seq      = ntohl(hdr->seq);
         const uint16_t frag_idx = ntohs(hdr->frag_idx);
         const uint16_t frag_cnt = ntohs(hdr->frag_cnt);
-        const uint64_t ts_us    = be64toh(hdr->ts_us);
-        const uint16_t w        = ntohs(hdr->width);
-        const uint16_t h        = ntohs(hdr->height);
 
         if (!sane_frag_cnt(frag_cnt) || frag_idx >= frag_cnt)
         { 
@@ -387,9 +354,7 @@ end_linux_loop:
             FragAcc acc;
             acc.frag_cnt = frag_cnt;
             acc.data.resize((size_t)frag_cnt * MTU);
-            acc.frag_len.assign(frag_cnt, 0);
-            acc.got.assign(frag_cnt, false);
-            acc.ts_us = ts_us; acc.w = w; acc.h = h;
+            acc.frag.resize(frag_cnt, FragInfo{0,false});
             acc.received = 0;
             acc.start = std::chrono::steady_clock::now();
             it = m_acc.emplace(seq, std::move(acc)).first;
@@ -397,14 +362,14 @@ end_linux_loop:
         auto& A = it->second;
         if (A.frag_cnt != frag_cnt) continue;
 
-        if (!A.got[frag_idx])
+        if (!A.frag[frag_idx].got)
         {
             size_t off = (size_t)frag_idx * MTU;
             if (off + payload_len <= A.data.size())
             {
                 std::memcpy(A.data.data() + off, payload, payload_len);
-                A.frag_len[frag_idx] = (uint16_t)payload_len;
-                A.got[frag_idx] = true;
+                A.frag[frag_idx].len = (uint16_t)payload_len;
+                A.frag[frag_idx].got = true;
                 ++A.received;
             }
         }
@@ -412,28 +377,25 @@ end_linux_loop:
         if (A.received == A.frag_cnt)
         {
             size_t total = 0;
-            for (uint16_t i=0; i<A.frag_cnt; ++i) total += A.frag_len[i];
-
-            if (m_jpgScratch.size() < total) m_jpgScratch.resize(total);
+            for (uint16_t i=0; i<A.frag_cnt; ++i) total += A.frag[i].len;
+            Q_ASSERT(total <= std::numeric_limits<int>::max());
+            QByteArray ba;
+            ba.resize(int(total));
             int pos = 0;
             for (uint16_t i=0; i<A.frag_cnt; ++i)
             {
-                size_t off = (size_t)i * MTU;
-                int len = (int)A.frag_len[i];
+                int len = (int)A.frag[i].len;
                 if (len > 0)
-                { 
-                    std::memcpy(m_jpgScratch.data()+pos, A.data.data()+off, len); 
+                {
+                    std::memcpy(ba.data()+pos, A.data.data() + (size_t)i*MTU, len);
                     pos += len;
                 }
             }
-
-            // Offload JPEG decode for worker-thread; if it's busy drop frame
             if (!m_decoderBusy.exchange(true, std::memory_order_relaxed))
             {
-                QByteArray ba(reinterpret_cast<const char*>(m_jpgScratch.data()), pos);
                 QMetaObject::invokeMethod(m_jpegWorker, "decode",
                                           Qt::QueuedConnection,
-                                          Q_ARG(QByteArray, ba));
+                                          Q_ARG(QByteArray, std::move(ba)));
                 m_lastDisplayedSeq = seq;
             }
             m_acc.erase(it);
@@ -447,9 +409,9 @@ end_linux_loop:
     const auto call_t1 = std::chrono::steady_clock::now();
     const uint64_t us_total =
         (uint64_t)std::chrono::duration_cast<std::chrono::microseconds>(call_t1 - call_t0).count();
-    #if defined(DEBUG)
+#if defined(DEBUG)
     g_pollStats.note(us_total);
-    #endif
+#endif
 
     m_notifier->setEnabled(true);
 }
@@ -481,16 +443,27 @@ void UdpMjpegReceiver::dropStaleFrames()
         }
     }
 
-    if (m_acc.size() > BATCH)
+    // hard limit in-flight without sort, delete oldest
+    if (m_acc.size() > (size_t)MAX_INFLIGHT)
     {
-        std::vector<std::pair<std::chrono::steady_clock::time_point,uint32_t>> ages;
-        ages.reserve(m_acc.size());
-        for (auto& [seq, A] : m_acc) ages.emplace_back(A.start, seq);
-        std::sort(ages.begin(), ages.end());
-        for (size_t i=0; i + BATCH < ages.size(); ++i)
+        // one run: find oldest and delete until limit
+        while (m_acc.size() > (size_t)MAX_INFLIGHT)
         {
-            ++m_rxStats.incompleteFrames;
-            m_acc.erase(ages[i].second);
+            auto oldest = m_acc.end();
+            auto oldest_tp = now;
+            for (auto it = m_acc.begin(); it != m_acc.end(); ++it)
+            {
+                if (it->second.start < oldest_tp)
+                {
+                    oldest_tp = it->second.start;
+                    oldest = it;
+                }
+            }
+            if (oldest != m_acc.end())
+            {
+                ++m_rxStats.incompleteFrames;
+                m_acc.erase(oldest);
+            } else break;
         }
     }
 }

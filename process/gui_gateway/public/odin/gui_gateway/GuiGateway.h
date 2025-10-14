@@ -1,6 +1,7 @@
 #ifndef GUIGATEWAY_H
 #define GUIGATEWAY_H
 
+#include "UdpHandler.hpp"
 #include "TcpHandler.hpp"
 #include "InetCommData.h"
 #include "odin/shmem_wrapper/ShmemHandler.hpp"
@@ -31,10 +32,12 @@ public:
     static void handleGuiDiagnostic(GuiGateway * gg);
     static void handleGuiControlSelection(GuiGateway * gg);
     static void handleGuiScriptedMotionRequest(GuiGateway * gg);
+    static void handleGuiCameraPos(GuiGateway * gg);
 
     static void handleArmDiagnostic(GuiGateway * gg);
     static void handleArmControlSelection(GuiGateway * gg);
     static void handleArmScriptedMotionRequest(GuiGateway * gg);
+    static void handleArmCameraPos(GuiGateway * gg);
 
     static bool m_run_process;
     static void signalCallbackHandler(int signum);
@@ -52,6 +55,11 @@ private:
     std::unique_ptr<TcpHandler<OdinServoStep>> m_scripted_motion_step_inet_handler;
     std::unique_ptr<ShmemHandler<OdinServoStep>> m_scripted_motion_step_shmem_handler;
 
+    std::unique_ptr<UdpHandler<CameraPosData>> m_camera_pos_inet_handler;
+    std::unique_ptr<TcpHandler<CameraPosReadyData>> m_camera_pos_ready_inet_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<CameraPosData>> m_camera_pos_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<CameraPosReadyData>> m_camera_pos_ready_shmem_handler;
+
     DiagnosticData m_remote_diagnostic;
     DiagnosticData m_previous_remote_diagnostic;
 
@@ -61,6 +69,7 @@ private:
     std::thread m_diagnostic_thread;
     std::thread m_control_selection_thread;
     std::thread m_scripted_motion_request_thread;
+    std::thread m_camera_pos_thread;
 };
 
 } // gui_gateway
