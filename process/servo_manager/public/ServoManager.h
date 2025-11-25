@@ -10,9 +10,12 @@
 #include "odin/shmem_wrapper/ShmemHandler.hpp"
 
 #include <array>
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <string>
 #include <cstdint>
-#include <semaphore.h>
+#include <thread>
 #include <vector>
 
 // TODO: Move it to config file
@@ -30,7 +33,7 @@ class ServoManager
 {
 public:
     ServoManager();
-    ~ServoManager() = default;
+    ~ServoManager();
 
     void runProcess();
     void servoDataReader();
@@ -83,7 +86,7 @@ private:
     ScriptedMotionStepData m_req_data{m_current_step_index, m_req_status};
     ScriptedMotionStepData m_rep_data{m_current_step_index, m_rep_status};
 
-    CameraPosData m_campera_pos_data;
+    CameraPosData m_camera_pos_data;
     CameraPosReadyData m_camera_pos_ready_data;
 
     bool m_log_phase = true;
@@ -92,6 +95,26 @@ private:
     void handleAutomaticData();
     void handleCameraMovement();
     void updateLedColors(std::uint8_t led_options);
+private:
+    // TODO: Move somewhere else
+    const std::vector<OdinServoStep> m_smile_wave = {
+        {1,  0, 1500, 0, 10},
+        {2,  2, 1670, 0, 10},
+        {3,  1, 1850, 0, 10},
+        {4,  3, 1400, 0, 10},
+        {5,  5, 1500, 0, 10},
+        {6,  4, 2500, 0, 10},
+        {7,  3, 1750, 0, 10},
+        {8,  3, 980,  0, 10},
+        {9,  3, 1750, 0, 10},
+        {10, 3, 980,  0, 10},
+        {11, 3, 1400, 0, 10}
+    };
+    static void smileWaveMovement(ServoManager *);
+    std::thread m_smile_wave_thread;
 };
+
+static std::atomic_bool smile_detected = false;
+static std::atomic_bool smile_wave_in_progress = false;
 
 #endif // SERVOMANAGER_H

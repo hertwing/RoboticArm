@@ -563,7 +563,7 @@ void GuiGateway::handleGuiCameraPos(GuiGateway * gg)
             }
             if (cam_pos_old != cam_pos)
             {
-                std::cout << "CAM POS GUI: " << +cam_pos.pan_pos.servo_num << " " << +cam_pos.pan_pos.position << std::endl;
+                // std::cout << "CAM POS GUI: " << +cam_pos.pan_pos.servo_num << " " << +cam_pos.pan_pos.position << " TARGET SMILE: " << cam_pos.target_smiling << std::endl;
                 cam_pos_old = cam_pos;
                 if (!gg->m_camera_pos_inet_handler->write(&cam_pos))
                 {
@@ -611,7 +611,7 @@ void GuiGateway::handleArmCameraPos(GuiGateway * gg)
             }
             if (cam_pos_old != cam_pos)
             {
-                std::cout << "CAM POS ARM: " << +cam_pos.pan_pos.servo_num << " " << +cam_pos.pan_pos.position << std::endl;
+                // std::cout << "CAM POS ARM: " << +cam_pos.pan_pos.servo_num << " " << +cam_pos.pan_pos.position << " TARGET SMILE: " << cam_pos.target_smiling << std::endl;
                 cam_pos_old = cam_pos;
                 if (!gg->m_camera_pos_shmem_handler->shmemWrite(&cam_pos))
                 {

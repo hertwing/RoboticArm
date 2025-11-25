@@ -73,7 +73,7 @@ struct RxFrameStats
     }
 };
 
-// ---- Top-level QObject for JPEG decoding (moc does not support nested Q_OBJECT) ----
+// Top-level QObject for JPEG decoding (moc does not support nested Q_OBJECT)
 class JpegWorker : public QObject
 {
     Q_OBJECT

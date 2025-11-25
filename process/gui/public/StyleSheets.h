@@ -35,6 +35,16 @@ const QString DISABLED_CAMERA_STYLE_SHEET =
     background-color: rgb(204, 0, 0); \
     image: url(:/icons/resources/camera_icon.png);";
 
+const QString ENABLED_TARGET_DRAW_STYLE_SHEET = 
+    "padding: 1; \
+    image: url(:/icons/resources/target_icon.png); \
+    background-color: rgb(115, 210, 22);";
+
+const QString DISABLED_TARGET_DRAW_STYLE_SHEET =
+    "padding: 1; \
+    image: url(:/icons/resources/target_icon.png); \
+    background-color: rgb(204, 0, 0);";
+
 const QString ENABLED_AUTOMATIC_STYLE_SHEET =
     "padding: 3; \
     background-color: rgb(255, 155, 0); \

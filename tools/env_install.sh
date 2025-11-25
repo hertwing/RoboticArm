@@ -124,7 +124,7 @@ cd ..
 
 # rsync -avz gui@robogui:/lib gui@robogui:/usr gui@robogui:/opt rpi-sysroot
 
-# export RPI_SYSROOT="$HOME/rpi-sysroot"
+# export RPI_SYSROOT="$HOME/rpi-5-sysroot"
 
 # export PKG_CONFIG_DIR=""
 # export PKG_CONFIG_SYSROOT_DIR="$RPI_SYSROOT"
@@ -141,38 +141,38 @@ cd ..
 
 # mkdir -p ~/build-opencv-aarch64 && cd ~/build-opencv-aarch64
 
-# cmake ../opencv \
-#   -D CMAKE_MAKE_PROGRAM=/usr/bin/make \
-#   -D BUILD_opencv_python3=OFF \
-#   -D BUILD_opencv_python_bindings_generator=OFF \
-#   -D OPENCV_PYTHON_SKIP_DETECTION=ON \
-#   -D CMAKE_TOOLCHAIN_FILE=/home/piotr/RoboticArm/rpi_toolchain.cmake \
-#   -D CMAKE_BUILD_TYPE=Release \
-#   -D CMAKE_INSTALL_PREFIX=/usr/local \
-#   -D OPENCV_GENERATE_PKGCONFIG=ON \
-#   -D BUILD_SHARED_LIBS=ON \
-#   \
-#   -D WITH_TBB=ON -D BUILD_TBB=OFF \
-#   -D WITH_OPENMP=ON \
-#   -D ENABLE_NEON=ON \
-#   -D WITH_GSTREAMER=ON \
-#   -D WITH_V4L=ON \
-#   -D WITH_FFMPEG=ON \
-#   -D WITH_EIGEN=ON \
-#   -D WITH_QT=OFF \
-#   -D WITH_OPENCL=OFF \
-#   \
-#   -D BUILD_TESTS=OFF -D BUILD_PERF_TESTS=OFF -D BUILD_EXAMPLES=OFF \
-#   -D WITH_JPEG=ON  -D BUILD_JPEG=OFF \
-#   -D WITH_PNG=ON   -D BUILD_PNG=OFF \
-#   -D WITH_TIFF=ON  -D BUILD_TIFF=OFF \
-#   -D WITH_WEBP=ON  -D BUILD_WEBP=OFF \
-#   \
-#   -D EIGEN_INCLUDE_PATH=${RPI_SYSROOT}/usr/include/eigen3 \
-#   -D OPENCV_EXTRA_MODULES_PATH=~/opencv_contrib/modules
+cmake ../opencv \
+  -D CMAKE_MAKE_PROGRAM=/usr/bin/make \
+  -D BUILD_opencv_python3=OFF \
+  -D BUILD_opencv_python_bindings_generator=OFF \
+  -D OPENCV_PYTHON_SKIP_DETECTION=ON \
+  -D CMAKE_TOOLCHAIN_FILE=/home/piotr/RoboticArm/rpi5_aarch64_toolchain.cmake \
+  -D CMAKE_BUILD_TYPE=Release \
+  -D CMAKE_INSTALL_PREFIX=/usr/local \
+  -D OPENCV_GENERATE_PKGCONFIG=ON \
+  -D BUILD_SHARED_LIBS=ON \
+  \
+  -D WITH_TBB=ON -D BUILD_TBB=OFF \
+  -D WITH_OPENMP=ON \
+  -D ENABLE_NEON=ON \
+  -D WITH_GSTREAMER=ON \
+  -D WITH_V4L=ON \
+  -D WITH_FFMPEG=ON \
+  -D WITH_EIGEN=ON \
+  -D WITH_QT=OFF \
+  -D WITH_OPENCL=OFF \
+  \
+  -D BUILD_TESTS=OFF -D BUILD_PERF_TESTS=OFF -D BUILD_EXAMPLES=OFF \
+  -D WITH_JPEG=ON  -D BUILD_JPEG=OFF \
+  -D WITH_PNG=ON   -D BUILD_PNG=OFF \
+  -D WITH_TIFF=ON  -D BUILD_TIFF=OFF \
+  -D WITH_WEBP=ON  -D BUILD_WEBP=OFF \
+  \
+  -D EIGEN_INCLUDE_PATH=${RPI_SYSROOT}/usr/include/eigen3 \
+  -D OPENCV_EXTRA_MODULES_PATH=~/opencv_contrib/modules
 
-# make -j$(nproc)
-# DESTDIR="${RPI_SYSROOT}" make install
+make -j$(nproc)
+DESTDIR="${RPI_SYSROOT}" make install
 
 # export RPI_SYSROOT="$HOME/rpi-sysroot"
 # export RPI_GUI_HOST="gui@192.168.1.103"

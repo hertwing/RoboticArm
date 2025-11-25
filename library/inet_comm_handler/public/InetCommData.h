@@ -126,18 +126,21 @@ struct CameraPosData
 {
     OdinServoStep pan_pos;
     OdinServoStep tilt_pos;
+    bool target_smiling = false;
 
     CameraPosData & operator=(const CameraPosData & obj)
     {
         pan_pos = obj.pan_pos;
         tilt_pos = obj.tilt_pos;
+        target_smiling = obj.target_smiling;
         return *this;
     }
 
     bool operator==(const CameraPosData & obj) const
     {
         return pan_pos == obj.pan_pos &&
-               tilt_pos == obj.tilt_pos;
+               tilt_pos == obj.tilt_pos &&
+               target_smiling == obj.target_smiling;
     }
 
     bool operator!=(const CameraPosData & obj) const

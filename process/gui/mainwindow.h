@@ -302,6 +302,7 @@ private slots:
     void on_button_stop_clicked();
     void handleMotionCompleted();
     void on_button_camera_clicked();
+    void on_button_draw_targets_clicked();
     void onFrame(const QImage& img);
 
 private:
@@ -310,7 +311,6 @@ private:
     void clear_line_edits();
     void scan_automatic_files();
     void handle_num_buttons(char num);
-    bool loadFaceCascadeFromResource();
 
 private:
     Ui::MainWindow * ui;
@@ -372,12 +372,15 @@ private:
     QRect m_face_bbox;
     QRect m_roi_hint;
     bool m_haveFaceQt = false;
-    std::string m_cascade_tmp_path = "";
+    double m_smile_conf = 0.0;
+    double m_smile_counter = 0.0;
+    bool m_smile_detected = false;
     std::vector<QLineEdit*> m_line_edits;
 
     bool m_needFreshDetection = false;
     bool m_camera_move_done = true;
     bool m_afterTargetBlock = false;
     int  m_afterTargetDelayMs = 200;
+    bool m_draw_targets = false;
 };
 #endif // MAINWINDOW_H

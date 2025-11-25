@@ -84,7 +84,6 @@ MainWindow::MainWindow(QWidget * parent):
     QMainWindow::showFullScreen();
 
     m_uiTimer.start();
-    const bool cascadeOk = loadFaceCascadeFromResource();
 
     m_rxThread = new QThread(this);
     m_rx = new UdpMjpegReceiver();
@@ -98,21 +97,20 @@ MainWindow::MainWindow(QWidget * parent):
 
     m_rxThread->start();
 
-    // Worker
-    if (cascadeOk)
+    m_faceThread = new QThread(this);
+    m_CvWorker = new CvWorker();
+    if (m_CvWorker->isCascadeLoaded())
     {
-        m_faceThread = new QThread(this);
-        m_CvWorker = new CvWorker(m_cascade_tmp_path);
         m_CvWorker->moveToThread(m_faceThread);
 
         connect(m_faceThread, &QThread::finished, m_CvWorker, &QObject::deleteLater);
-        connect(m_CvWorker, &CvWorker::result, this,
-            [this](bool found, const QRect& r)
+        connect(m_CvWorker, &CvWorker::resultWithSmileConf, this,
+            [this](bool found, const QRect& r, double conf)
             {
                 m_faceBusy = false;
                 if (!m_camera_pos_ready_data.camera_pos_ready) return;
                 m_haveFaceQt = found;
-
+                m_smile_conf = conf;
                 if (found && r.isValid() && !r.isEmpty())
                 {
                     m_face_bbox = r;
@@ -237,6 +235,7 @@ void MainWindow::draw_menu()
     ui->button_diagnostic->setStyleSheet(DISABLED_DIAGNOSTIC_STYLE_SHEET);
     ui->button_exit->setStyleSheet(BUTTON_EXIT_STYLE_SHEET);
     ui->button_rpi_switch->setStyleSheet(BUTTON_RPI_SWITCH_GUI_STYLE_SHEET);
+    ui->button_draw_targets->setStyleSheet(DISABLED_TARGET_DRAW_STYLE_SHEET);
     // Widgets
     ui->stackedWidget->setCurrentIndex(static_cast<int>(WidgetPage::MAIN));
     ui->widget_cpu_temp->setStyleSheet(DIAGNOSTIC_WIDGET_STYLE_SHEET);
@@ -631,6 +630,7 @@ void MainWindow::on_button_load_clicked()
             std::cout << "[OdinGui][load] " << m_odin_steps_io_handler.toString(res.error) << ": " << res.message << "\n";
             QMessageBox::warning(this, "Load failed", QString::fromStdString(res.message));
         }
+        scan_automatic_files();
     } 
     catch (const std::exception& e)
     { 
@@ -688,6 +688,15 @@ void MainWindow::handleMotionCompleted()
     ui->button_execute->setEnabled(true);
 }
 
+void MainWindow::on_button_draw_targets_clicked()
+{
+    m_draw_targets = !m_draw_targets;
+
+    ui->button_draw_targets->setStyleSheet(
+        m_draw_targets ? ENABLED_TARGET_DRAW_STYLE_SHEET
+                       : DISABLED_TARGET_DRAW_STYLE_SHEET);
+}
+
 void MainWindow::onFrame(const QImage & img)
 {
     if (m_mode != UIMode::CAMERA) return;
@@ -700,7 +709,7 @@ void MainWindow::onFrame(const QImage & img)
     QImage display = img;
 
     // m_face_bbox draw
-    if (m_haveFaceQt && m_face_bbox.isValid() && !m_face_bbox.isEmpty())
+    if (m_draw_targets && m_haveFaceQt && m_face_bbox.isValid() && !m_face_bbox.isEmpty())
     {
         QPainter p(&display);
         p.setRenderHint(QPainter::Antialiasing, true);
@@ -710,6 +719,7 @@ void MainWindow::onFrame(const QImage & img)
     }
 
     // m_roi_hint draw
+    if (m_draw_targets)
     {
         QPainter p(&display);
         p.setRenderHint(QPainter::Antialiasing, true);
@@ -720,6 +730,26 @@ void MainWindow::onFrame(const QImage & img)
     }
 
     m_camera_pos_ready_shmem_handler->shmemRead(&m_camera_pos_ready_data);
+
+    if (m_smile_conf > 0.1)
+    {
+        m_smile_counter += m_smile_conf;
+    }
+    else
+    {
+        m_smile_counter = 0.0;
+        m_smile_detected = false;
+    }
+
+    if (m_smile_counter > 3.0)
+    {
+        m_smile_detected = true;
+    }
+    // std::cout << "Count " << m_smile_conf << std::endl;
+    // std::cout << m_smile_detected << std::endl;
+
+    m_camera_pos_data.target_smiling = m_smile_detected;
+    m_camera_pos_shmem_handler->shmemWrite(&m_camera_pos_data);
 
     if (m_camera_pos_ready_data.camera_pos_ready &&
         m_camera_move_done &&
@@ -740,7 +770,8 @@ void MainWindow::onFrame(const QImage & img)
         if (m_camera_pos_data.pan_pos.position  > MAX_CAM_PAN_POS_VAL)  m_camera_pos_data.pan_pos.position  = MAX_CAM_PAN_POS_VAL;
         if (m_camera_pos_data.tilt_pos.position < MIN_CAM_TILT_POS_VAL) m_camera_pos_data.tilt_pos.position = MIN_CAM_TILT_POS_VAL;
         if (m_camera_pos_data.tilt_pos.position > MAX_CAM_TILT_POS_VAL) m_camera_pos_data.tilt_pos.position = MAX_CAM_TILT_POS_VAL;
-
+        
+        m_camera_pos_data.target_smiling = m_smile_detected;
         m_camera_pos_shmem_handler->shmemWrite(&m_camera_pos_data);
         m_needFreshDetection = m_haveFaceQt;
     }
@@ -791,37 +822,6 @@ void MainWindow::onFrame(const QImage & img)
         Qt::KeepAspectRatio,
         Qt::FastTransformation);
     ui->camera_label->setPixmap(pm);
-}
-
-bool MainWindow::loadFaceCascadeFromResource()
-{
-    const QString tmp = QStandardPaths::writableLocation(QStandardPaths::TempLocation)
-                        + "/haarcascade_frontalface_default.xml";
-    m_cascade_tmp_path = tmp.toStdString();
-
-    QFile f(":/data/haarcascade_frontalface_default.xml");
-    if (!f.open(QIODevice::ReadOnly)) {
-        qWarning() << "[GUI] No cascade in resources (:/data/haarcascade_frontalface_default.xml)";
-        return false;
-    }
-    const QByteArray xml = f.readAll();
-    f.close();
-
-    std::ofstream ofs(m_cascade_tmp_path, std::ios::binary | std::ios::trunc);
-    if (!ofs) {
-        qWarning() << "[GUI] Tmp cascade write failed:" << tmp;
-        return false;
-    }
-    ofs.write(xml.constData(), static_cast<std::streamsize>(xml.size()));
-    ofs.close();
-
-    // sanity check
-    if (!std::filesystem::exists(m_cascade_tmp_path) ||
-        std::filesystem::file_size(m_cascade_tmp_path) == 0) {
-        qWarning() << "[GUI] Cascade file missing/empty:" << tmp;
-        return false;
-    }
-    return true;
 }
 
 void MainWindow::on_button_stop_clicked()

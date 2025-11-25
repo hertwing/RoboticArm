@@ -14,7 +14,7 @@
 class CvWorker : public QObject {
     Q_OBJECT
 public:
-    explicit CvWorker(const std::string & cascadePath, QObject* parent=nullptr);
+    explicit CvWorker(QObject* parent=nullptr);
     ~CvWorker() = default;
 
     // Detector config parameters setters
@@ -31,6 +31,8 @@ public:
     void enableTracking(bool on) { m_enableTracking = on; }
     /// how many tracker failures allow before give up
     void setTrackMaxMisses(int n) { m_trackMaxMisses = n; }
+
+    bool isCascadeLoaded() const { return m_cascade_loaded; }
 public slots:
     /// \param src source image to process
     /// \param forceFull detect on full image despite ROI/throttling
@@ -47,12 +49,23 @@ signals:
     /// \param found if the face was found
     /// \param rect QRect object to draw on the face area
     void result(bool found, const QRect & rect);
-    /// result signal with confidence (for tracker)
-    void resultWithConf(bool found, const QRect & rect, double conf);
+    /// result signal with smile confidence (for tracker)
+    void resultWithSmileConf(bool found, const QRect & rect, double conf);
 private:
     // Internal implementation shared by both public slots.
     void processImpl(const QImage & src, const QRect * roiHint, bool forceFull);
-    cv::CascadeClassifier m_cascade; // Haar face detector
+
+    bool loadCascadeFromResource(const std::string & cascade_path,
+                                 cv::CascadeClassifier & cascade_classifier);
+
+    const std::string m_face_cascade_name = "haarcascade_frontalface_default.xml";
+    const std::string m_smile_cascade_name = "haarcascade_smile.xml";
+    const std::string m_nose_cascade_name = "haarcascade_mcs_nose.xml";
+    std::string m_cascade_tmp_path = "";
+
+    cv::CascadeClassifier m_face_cascade; // Haar face detector
+    cv::CascadeClassifier m_smile_cascade; // Haar face detector
+    cv::CascadeClassifier m_nose_cascade;
     bool m_cascade_loaded = false;
 
     // Detector config parameters
@@ -97,6 +110,10 @@ private:
     double  m_kltMinDist = 5.0;
     double  m_fbMaxErr = 1.5; // forward-backward max median error (px)
     double  m_inlierFracThresh = 0.6; // min inlier faction
+
+    int m_noseMissStreak = 0;
+    int m_kNoseMissToSnap = 4;
+    bool m_sizeEmaInit = false;
 };
 
 #endif // CVWORKER_H

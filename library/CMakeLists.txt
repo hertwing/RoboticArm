@@ -1,11 +1,12 @@
+option(BUILD_PI4_ARM "Build Raspberry Pi 4 specific components" OFF)
+
 add_subdirectory(diagnostic_handler)
 add_subdirectory(inet_comm_handler)
 add_subdirectory(joypad)
 add_subdirectory(odin_steps_io_handler)
 add_subdirectory(shmem_handler)
 add_subdirectory(video_handler)
-
-if (BUILD_ARM)
-    add_subdirectory(servo_controller)
+add_subdirectory(servo_controller)
+if (BUILD_PI4_ARM)
     add_subdirectory(led_handler)
 endif ()

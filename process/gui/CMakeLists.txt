@@ -11,6 +11,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(QT_DEBUG_FIND_PACKAGE ON)
 
+# Pomóż FindEGL/FindGLESv2 przejść testy kompilacyjne
+# (użyje tego CMake w HAVE_EGL/HAVE_GLESv2).
+set(CMAKE_REQUIRED_FLAGS     "--sysroot=${CMAKE_SYSROOT}")
+set(CMAKE_REQUIRED_INCLUDES  "${CMAKE_SYSROOT}/usr/include")
+set(CMAKE_REQUIRED_LIBRARIES
+    "${CMAKE_SYSROOT}/usr/lib/aarch64-linux-gnu/libEGL.so"
+    "${CMAKE_SYSROOT}/usr/lib/aarch64-linux-gnu/libGLESv2.so"
+)
+
+# Preseed wartości wyszukiwane przez Find-moduły (jako CACHE),
+# żeby nie musiał zgadywać ścieżek:
+set(EGL_INCLUDE_DIR     "${CMAKE_SYSROOT}/usr/include"                             CACHE PATH     "EGL include")
+set(EGL_LIBRARY         "${CMAKE_SYSROOT}/usr/lib/aarch64-linux-gnu/libEGL.so"    CACHE FILEPATH "EGL lib")
+set(GLESv2_INCLUDE_DIR  "${CMAKE_SYSROOT}/usr/include"                             CACHE PATH     "GLESv2 include")
+set(GLESv2_LIBRARY      "${CMAKE_SYSROOT}/usr/lib/aarch64-linux-gnu/libGLESv2.so" CACHE FILEPATH "GLESv2 lib")
+
 find_package(QT NAMES Qt6 REQUIRED COMPONENTS Widgets Charts)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Charts)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc objdetect tracking)
@@ -82,21 +98,31 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE stdc++fs
     PRIVATE ${OpenCV_LIBS})
 
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+set(CMAKE_INSTALL_RPATH "/opt/qt-raspi/lib;/opt/opencv/lib;/usr/local/lib")
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    BUILD_RPATH   "/opt/qt-raspi/lib;/opt/opencv/lib;/usr/local/lib"
+    INSTALL_RPATH "${CMAKE_INSTALL_RPATH}"
+)
+
+set(CMAKE_SKIP_INSTALL_RPATH OFF)
+set(CMAKE_SKIP_RPATH OFF)
+
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
 # explicit, fixed bundle identifier manually though.
 if(${QT_VERSION} VERSION_LESS 6.1.0)
   set(BUNDLE_ID_OPTION MACOSX_BUNDLE_GUI_IDENTIFIER com.example.gui)
 endif()
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    ${BUNDLE_ID_OPTION}
-    BUILD_RPATH "/usr/local/lib"
-    INSTALL_RPATH "/usr/local/lib"
-    MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
-    MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
-    MACOSX_BUNDLE TRUE
-    WIN32_EXECUTABLE TRUE
-)
+# set_target_properties(${PROJECT_NAME} PROPERTIES
+#     ${BUNDLE_ID_OPTION}
+#     BUILD_RPATH "/usr/local/lib"
+#     INSTALL_RPATH "/usr/local/lib"
+#     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
+#     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
+#     MACOSX_BUNDLE TRUE
+#     WIN32_EXECUTABLE TRUE
+# )
 
 # include(GNUInstallDirs)
 # install(TARGETS ${PROJECT_NAME}
