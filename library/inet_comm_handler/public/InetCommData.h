@@ -67,27 +67,6 @@ enum class ScriptedMotionReplyStatus
     DISCONNECTED
 };
 
-struct OdinControlSelection
-{
-    std::uint8_t control_selection;
-
-    bool operator==(const OdinControlSelection & obj) const
-    {
-        return control_selection == obj.control_selection;
-    }
-
-    bool operator!=(const OdinControlSelection & obj) const
-    {
-        return !(*this==obj);
-    }
-
-    OdinControlSelection & operator=(const OdinControlSelection & obj)
-    {
-        control_selection = obj.control_selection;
-        return *this;
-    }
-};
-
 // TODO: Move to different header 
 struct OdinServoStep
 {
@@ -99,6 +78,8 @@ struct OdinServoStep
 
     OdinServoStep & operator=(const OdinServoStep & obj)
     {
+        if (this == &obj)
+            return *this;
         step_num = obj.step_num;
         servo_num = obj.servo_num;
         position = obj.position;
@@ -130,6 +111,8 @@ struct CameraPosData
 
     CameraPosData & operator=(const CameraPosData & obj)
     {
+        if (this == &obj)
+            return *this;
         pan_pos = obj.pan_pos;
         tilt_pos = obj.tilt_pos;
         target_smiling = obj.target_smiling;
@@ -157,6 +140,8 @@ struct CameraPosReadyData
 
     CameraPosReadyData & operator=(const CameraPosReadyData & obj)
     {
+        if (this == &obj)
+            return *this;
         pan_pos = obj.pan_pos;
         tilt_pos = obj.tilt_pos;
         camera_pos_ready = obj.camera_pos_ready;

@@ -19,8 +19,8 @@ bool GuiGateway::m_run_process = true;
 
 GuiGateway::GuiGateway()
 {
-    m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
-    m_previous_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    m_control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    m_previous_control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
 }
 
 void GuiGateway::runProcess(int argc, char * argv[])
@@ -105,10 +105,10 @@ void GuiGateway::handleGuiDiagnostic(GuiGateway * gg)
 
 void GuiGateway::handleGuiControlSelection(GuiGateway * gg)
 {   
-    gg->m_control_selection_shmem_handler = std::make_unique<ShmemHandler<OdinControlSelection>>(
-        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), false);
-    gg->m_control_selection_comm_handler = std::make_unique<TcpHandler<OdinControlSelection>>(
-        sizeof(OdinControlSelection), CONTROL_SELECTION_PORT);
+    gg->m_control_selection_shmem_handler = std::make_unique<ShmemHandler<std::uint8_t>>(
+        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(std::uint8_t), false);
+    gg->m_control_selection_comm_handler = std::make_unique<TcpHandler<std::uint8_t>>(
+        sizeof(std::uint8_t), CONTROL_SELECTION_PORT);
     while (gg->m_run_process)
     {
         if (gg->m_control_selection_shmem_handler->openShmem())
@@ -329,10 +329,10 @@ void GuiGateway::handleArmDiagnostic(GuiGateway * gg)
 
 void GuiGateway::handleArmControlSelection(GuiGateway * gg)
 {
-    gg->m_control_selection_shmem_handler = std::make_unique<ShmemHandler<OdinControlSelection>>(
-        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), true);
-    gg->m_control_selection_comm_handler = std::make_unique<TcpHandler<OdinControlSelection>>(
-        sizeof(OdinControlSelection), CONTROL_SELECTION_PORT, ROBOTIC_GUI_IP);
+    gg->m_control_selection_shmem_handler = std::make_unique<ShmemHandler<std::uint8_t>>(
+        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(std::uint8_t), true);
+    gg->m_control_selection_comm_handler = std::make_unique<TcpHandler<std::uint8_t>>(
+        sizeof(std::uint8_t), CONTROL_SELECTION_PORT, ROBOTIC_GUI_IP);
 
     if(!gg->m_control_selection_shmem_handler->shmemWrite(&(gg->m_control_selection)))
     {
@@ -627,9 +627,9 @@ void GuiGateway::handleArmCameraPos(GuiGateway * gg)
 void GuiGateway::signalCallbackHandler(int signum)
 {
     TcpHandler<DiagnosticData>::signalCallbackHandler(signum);
-    TcpHandler<OdinControlSelection>::signalCallbackHandler(signum);
+    TcpHandler<std::uint8_t>::signalCallbackHandler(signum);
     ShmemHandler<DiagnosticData>::signalCallbackHandler(signum);
-    ShmemHandler<OdinControlSelection>::signalCallbackHandler(signum);
+    ShmemHandler<std::uint8_t>::signalCallbackHandler(signum);
     std::cout << "GuiGateway received signal: " << signum << std::endl;
     m_run_process = false;
 }

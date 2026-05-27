@@ -34,14 +34,14 @@ ServoManager::ServoManager() :
         odin::shmem_wrapper::DataTypes::JOYPAD_SHMEM_NAME, sizeof(JoypadData), false);
     m_led_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<ws2811_led_t>>(
         odin::shmem_wrapper::DataTypes::LED_SHMEM_NAME, sizeof(m_led_color_status), false);
-    m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>>(
-        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), false);
+    m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<std::uint8_t>>(
+        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(std::uint8_t), false);
     m_camera_pos_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<CameraPosData>>(
         odin::shmem_wrapper::DataTypes::CAMERA_POSITION_SHMEM_NAME, sizeof(CameraPosData), false);
     m_camera_pos_ready_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<CameraPosReadyData>>(
         odin::shmem_wrapper::DataTypes::CAMERA_POSITION_READY_SHMEM_NAME, sizeof(CameraPosReadyData), false);
-    m_previous_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
-    m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    m_previous_control_selection = ControlSelection::NONE;
+    m_control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
 
     updateLedColors(LedOption::IDLE);
 
@@ -60,84 +60,97 @@ ServoManager::~ServoManager()
     m_smile_wave_thread.join();
 }
 
+void ServoManager::handleControlSelectionChanged(ControlSelection selection)
+{
+    std::cout << "Control selection changed to: ";
+
+    switch (selection)
+    {
+        case ControlSelection::JOYPAD:
+            updateLedColors(LedOption::JOYPAD);
+            std::cout << "JOYPAD." << std::endl;
+            break;
+
+        case ControlSelection::AUTOMATIC:
+            // m_current_step_index = 0;
+            // m_stop_requested = false;
+            updateLedColors(LedOption::AUTOMATIC_READY);
+            std::cout << "AUTOMATIC." << std::endl;
+            break;
+
+        case ControlSelection::CAMERA:
+            updateLedColors(LedOption::CAMERA);
+            std::cout << "CAMERA." << std::endl;
+            break;
+
+        default:
+            updateLedColors(LedOption::IDLE);
+            std::cout << "NONE." << std::endl;
+            break;
+    }
+}
+
+void ServoManager::handleCurrentControlSelection(ControlSelection selection)
+{
+    switch (selection)
+    {
+        case ControlSelection::JOYPAD:
+            handleJoypadControl();
+            break;
+
+        case ControlSelection::AUTOMATIC:
+            m_current_step_index = 0;
+            m_stop_requested = false;
+            handleAutomaticData();
+            break;
+
+        case ControlSelection::CAMERA:
+            handleCameraMovement();
+            break;
+
+        default:
+            break;
+    }
+}
 void ServoManager::servoDataReader()
 {
     while (m_run_process)
     {
-        if (m_control_selection_shmem_handler->shmemRead(&m_control_selection))
-        {
-            if (m_previous_control_selection.control_selection != m_control_selection.control_selection)
-            {
-                std::cout << +(m_previous_control_selection.control_selection) << " " << +(m_control_selection.control_selection) << std::endl;
-                m_previous_control_selection.control_selection = m_control_selection.control_selection;
-                std::cout << "Control selection changed to: ";
-                switch(m_control_selection.control_selection)
-                {
-                    case static_cast<std::uint8_t>(ControlSelection::JOYPAD):
-                        updateLedColors(LedOption::JOYPAD);
-                        std::cout << "JOYPAD." << std::endl;
-                        break;
-                    case static_cast<std::uint8_t>(ControlSelection::AUTOMATIC):
-                        updateLedColors(LedOption::AUTOMATIC_READY);
-                        std::cout << "AUTOMATIC." << std::endl;
-                        break;
-                    case static_cast<std::uint8_t>(ControlSelection::CAMERA):
-                        updateLedColors(LedOption::CAMERA);
-                        std::cout << "CAMERA." << std::endl;
-                        break;
-                    default:
-                        updateLedColors(LedOption::IDLE);
-                        std::cout << "NONE." << std::endl;
-                        break;
-                }
-            }
-            if (m_control_selection.control_selection == static_cast<std::uint8_t>(ControlSelection::JOYPAD))
-            {
-                if (m_joypad_shmem_handler->shmemRead(&m_joypad_data))
-                {
-                    praseJoypadData();
-                }
-                else
-                {
-                    std::cout << "Couldn't read from shmem." << std::endl;
-                }
-            }
-            else if (m_control_selection.control_selection == static_cast<std::uint8_t>(ControlSelection::AUTOMATIC))
-            {
-                m_current_step_index = 0;
-                m_stop_requested = false;
-                handleAutomaticData();
-            }
-            else if (m_control_selection.control_selection == static_cast<std::uint8_t>(ControlSelection::CAMERA))
-            {
-                handleCameraMovement();
-            }
-            else
-            {
-                
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        else
+        if (!m_control_selection_shmem_handler->shmemRead(&m_control_selection))
         {
             std::cout << "Couldn't read from control selection shmem." << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
         }
+
+        const auto currentSelection =
+            static_cast<ControlSelection>(m_control_selection);
+
+        if (!m_previous_control_selection ||
+            *m_previous_control_selection != currentSelection)
+        {
+            m_previous_control_selection = currentSelection;
+            handleControlSelectionChanged(currentSelection);
+        }
+
+        handleCurrentControlSelection(currentSelection);
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 
-void ServoManager::praseJoypadData()
+void ServoManager::parseJoypadData()
 {
     for (int i = 0; i < JoypadHandler::JOYPAD_CONTROL_DATA_BINS; ++i)
     {
         if (m_joypad_data_previous.data[i] != m_joypad_data.data[i])
         {
-            m_joypad_data_types.parseJoypadData(m_joypad_data);
+            m_joypad_state = JoypadState::fromJoypadData(m_joypad_data);
             break;
         }
     }
 
-    if (m_joypad_data_types.leftTrigger && m_joypad_data_previous.data[0] != 1)
+    if (m_joypad_state.leftTrigger && m_joypad_data_previous.data[0] != 1)
     {
         --m_current_servo_l;
         if (m_current_servo_l == m_current_servo_r)
@@ -157,7 +170,7 @@ void ServoManager::praseJoypadData()
         }
         updateLedColors(LedOption::JOYPAD);
     }
-    if (m_joypad_data_types.leftBumper && m_joypad_data_previous.data[0] != 4)
+    if (m_joypad_state.leftBumper && m_joypad_data_previous.data[0] != 4)
     {
         ++m_current_servo_l;
         if (m_current_servo_l == m_current_servo_r)
@@ -177,7 +190,7 @@ void ServoManager::praseJoypadData()
         }
         updateLedColors(LedOption::JOYPAD);
     }
-    if (m_joypad_data_types.rightTrigger && m_joypad_data_previous.data[0] != 2)
+    if (m_joypad_state.rightTrigger && m_joypad_data_previous.data[0] != 2)
     {
         --m_current_servo_r;
         if (m_current_servo_r == m_current_servo_l)
@@ -197,7 +210,7 @@ void ServoManager::praseJoypadData()
         }
         updateLedColors(LedOption::JOYPAD);
     }
-    if (m_joypad_data_types.rightBumper && m_joypad_data_previous.data[0] != 8)
+    if (m_joypad_state.rightBumper && m_joypad_data_previous.data[0] != 8)
     {
         ++m_current_servo_r;
         if (m_current_servo_r == m_current_servo_l)
@@ -218,49 +231,56 @@ void ServoManager::praseJoypadData()
         updateLedColors(LedOption::JOYPAD);
     }
 
-    if (m_joypad_data_types.leftStickX < 125)
+    if (m_joypad_state.leftStickX < 125)
     {
-        // TODO: Save servo numbers to config file
-        if (m_current_servo_l == 5)
+        if (m_current_servo_l == SERVO_GRIPPER ||
+            m_current_servo_l == SERVO_ARM_2 ||
+            m_current_servo_l == SERVO_ARM_3)
         {
-            m_servo_controller.moveRight(m_current_servo_l, 255 - m_joypad_data_types.leftStickX);
+            m_servo_controller.moveRight(m_current_servo_l, 255 - m_joypad_state.leftStickX);
         }
         else
         {
-            m_servo_controller.moveLeft(m_current_servo_l, m_joypad_data_types.leftStickX);
+            m_servo_controller.moveLeft(m_current_servo_l, m_joypad_state.leftStickX);
         }
     } 
-    else if (m_joypad_data_types.leftStickX > 129)
+    else if (m_joypad_state.leftStickX > 129)
     {
-        if (m_current_servo_l == 5)
+        if (m_current_servo_l == SERVO_GRIPPER ||
+            m_current_servo_l == SERVO_ARM_2 ||
+            m_current_servo_l == SERVO_ARM_3)
         {
-            m_servo_controller.moveLeft(m_current_servo_l, m_joypad_data_types.leftStickX);
+            m_servo_controller.moveLeft(m_current_servo_l, m_joypad_state.leftStickX);
         }
         else
         {
-            m_servo_controller.moveRight(m_current_servo_l, 255 - m_joypad_data_types.leftStickX);
+            m_servo_controller.moveRight(m_current_servo_l, 255 - m_joypad_state.leftStickX);
         }
     }
-    if (m_joypad_data_types.rightStickX < 125)
+    if (m_joypad_state.rightStickX < 125)
     {
-        if (m_current_servo_r == 5)
+        if (m_current_servo_r == SERVO_GRIPPER ||
+            m_current_servo_l == SERVO_ARM_2 ||
+            m_current_servo_l == SERVO_ARM_3)
         {
-            m_servo_controller.moveRight(m_current_servo_r, 255 - m_joypad_data_types.rightStickX);
+            m_servo_controller.moveRight(m_current_servo_r, 255 - m_joypad_state.rightStickX);
         }
         else
         {
-            m_servo_controller.moveLeft(m_current_servo_r, m_joypad_data_types.rightStickX);
+            m_servo_controller.moveLeft(m_current_servo_r, m_joypad_state.rightStickX);
         }
     }
-    else if (m_joypad_data_types.rightStickX > 129)
+    else if (m_joypad_state.rightStickX > 129)
     {
-        if (m_current_servo_r == 5)
+        if (m_current_servo_r == SERVO_GRIPPER ||
+            m_current_servo_l == SERVO_ARM_2 ||
+            m_current_servo_l == SERVO_ARM_3)
         {
-            m_servo_controller.moveLeft(m_current_servo_r, m_joypad_data_types.rightStickX);
+            m_servo_controller.moveLeft(m_current_servo_r, m_joypad_state.rightStickX);
         }
         else
         {
-            m_servo_controller.moveRight(m_current_servo_r, 255 - m_joypad_data_types.rightStickX);
+            m_servo_controller.moveRight(m_current_servo_r, 255 - m_joypad_state.rightStickX);
         }
     }
 
@@ -270,11 +290,22 @@ void ServoManager::praseJoypadData()
     }
 }
 
+void ServoManager::handleJoypadControl()
+{
+    if (m_joypad_shmem_handler->shmemRead(&m_joypad_data))
+    {
+        parseJoypadData();
+    }
+    else
+    {
+        std::cout << "Couldn't read from joypad shmem." << std::endl;
+    }
+}
+
 void ServoManager::handleAutomaticData()
 {
     while(!m_stop_requested)
     {
-
         switch(m_phase)
         {
             case Phase::Idle:
@@ -375,13 +406,12 @@ void ServoManager::handleCameraMovement()
     std::cout << "CAM move done" << std::endl;
 }
 
-        
 void ServoManager::smileWaveMovement(ServoManager * sm)
 {
     while(m_run_process)
     {
         // TODO: Block other movement while robot is waving
-        if (sm->m_control_selection.control_selection == static_cast<std::uint8_t>(ControlSelection::CAMERA))
+        if (sm->m_control_selection == static_cast<std::uint8_t>(ControlSelection::CAMERA))
         {
             if (!smile_wave_in_progress)
             {
@@ -471,7 +501,7 @@ void ServoManager::signalCallbackHandler(int signum)
 {
     odin::shmem_wrapper::ShmemHandler<JoypadData>::signalCallbackHandler(signum);
     odin::shmem_wrapper::ShmemHandler<ws2811_led_t>::signalCallbackHandler(signum);
-    odin::shmem_wrapper::ShmemHandler<OdinControlSelection>::signalCallbackHandler(signum);
+    odin::shmem_wrapper::ShmemHandler<std::uint8_t>::signalCallbackHandler(signum);
     std::cout << "ServoManager received signal: " << signum << std::endl;
     m_run_process = false;
 }

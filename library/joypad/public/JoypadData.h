@@ -1,47 +1,50 @@
 #ifndef JOYPADDATA_H
 #define JOYPADDATA_H
 
+#include <array>
 #include <cstdint>
 
 struct JoypadData
 {
-    std::uint8_t data[7];
+    static constexpr std::size_t Size = 7;
+    std::array<std::uint8_t, Size> data{};
 };
 
-struct JoypadDataTypes
+struct JoypadState
 {
-    std::uint8_t leftBumper   : 1;
-    std::uint8_t rightBumper  : 1;
-    std::uint8_t leftTrigger  : 1;
-    std::uint8_t rightTrigger : 1;
+    bool leftBumper   = false;
+    bool rightBumper  = false;
+    bool leftTrigger  = false;
+    bool rightTrigger = false;
 
-    std::uint8_t buttonA : 1;
-    std::uint8_t buttonB : 1;
-    std::uint8_t buttonX : 1;
-    std::uint8_t buttonY : 1;
+    bool buttonA = false;
+    bool buttonB = false;
+    bool buttonX = false;
+    bool buttonY = false;
 
-    std::uint8_t dPadUp        : 1;
-    std::uint8_t dPadUpRight   : 1;
-    std::uint8_t dPadRight     : 1;
-    std::uint8_t dPadDownRight : 1;
-    std::uint8_t dPadDown      : 1;
-    std::uint8_t dPadDownLeft  : 1;
-    std::uint8_t dPadLeft      : 1;
-    std::uint8_t dPadUpLeft    : 1;
+    bool dPadUp        = false;
+    bool dPadUpRight   = false;
+    bool dPadRight     = false;
+    bool dPadDownRight = false;
+    bool dPadDown      = false;
+    bool dPadDownLeft  = false;
+    bool dPadLeft      = false;
+    bool dPadUpLeft    = false;
 
-    std::uint8_t buttonStart  : 1;
-    std::uint8_t buttonSelect : 1;
+    bool buttonSelect = false;
+    bool buttonStart  = false;
 
-    std::uint8_t buttonLeftStick  : 1;
-    std::uint8_t buttonRightStick : 1;
+    bool buttonLeftStick  = false;
+    bool buttonRightStick = false;
 
     std::uint8_t leftStickX;
     std::uint8_t leftStickY;
     std::uint8_t rightStickX;
     std::uint8_t rightStickY;
 
-    const JoypadData createJoypadData();
-    void parseJoypadData(const JoypadData & data);
+    JoypadData createJoypadData() const;
+    static JoypadState fromJoypadData(const JoypadData & data);
+    // void parseJoypadData(const JoypadData & data);
     void printJoypadData();
 };
 

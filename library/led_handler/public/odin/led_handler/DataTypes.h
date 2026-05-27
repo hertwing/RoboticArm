@@ -1,7 +1,7 @@
 #ifndef LEDHANDLERDATATYPES_H
 #define LEDHANDLERDATATYPES_H
 
-#include <ws2811.h>
+#include <ws2811/ws2811.h>
 #include <cstdint>
 
 namespace led_handler {

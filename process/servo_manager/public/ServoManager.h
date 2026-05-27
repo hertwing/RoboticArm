@@ -11,10 +11,11 @@
 
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <condition_variable>
 #include <mutex>
+#include <optional>
 #include <string>
-#include <cstdint>
 #include <thread>
 #include <vector>
 
@@ -43,10 +44,10 @@ public:
 private:
     JoypadData m_joypad_data;
     JoypadData m_joypad_data_previous;
-    JoypadDataTypes m_joypad_data_types;
+    JoypadState m_joypad_state;
     ServoController m_servo_controller;
-    OdinControlSelection m_control_selection;
-    OdinControlSelection m_previous_control_selection;
+    std::uint8_t m_control_selection;
+    std::optional<ControlSelection> m_previous_control_selection;
     std::string m_joypad_manager_pid;
 
     ws2811_led_t m_led_color_status[led_handler::LED_COUNT];
@@ -64,7 +65,7 @@ private:
 
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<JoypadData>> m_joypad_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<ws2811_led_t>> m_led_shmem_handler;
-    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<std::uint8_t>> m_control_selection_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>> m_scripted_motion_request_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<ScriptedMotionStepData>> m_scripted_motion_reply_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinServoStep>> m_scripted_motion_step_shmem_handler;
@@ -91,7 +92,10 @@ private:
 
     bool m_log_phase = true;
 private:
-    void praseJoypadData();
+    void parseJoypadData();
+    void handleControlSelectionChanged(ControlSelection selection);
+    void handleCurrentControlSelection(ControlSelection selection);
+    void handleJoypadControl();
     void handleAutomaticData();
     void handleCameraMovement();
     void updateLedColors(std::uint8_t led_options);
@@ -100,7 +104,7 @@ private:
     const std::vector<OdinServoStep> m_smile_wave = {
         {1,  0, 1500, 0, 10},
         {2,  2, 1670, 0, 10},
-        {3,  1, 1850, 0, 10},
+        {3,  1, 1500, 0, 10},
         {4,  3, 1400, 0, 10},
         {5,  5, 1500, 0, 10},
         {6,  4, 2500, 0, 10},

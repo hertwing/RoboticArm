@@ -1,4 +1,5 @@
 #!/bin/bash
+export ODIN_NODE=Arm
 
 mkdir -p /tmp/logs
 

@@ -37,7 +37,7 @@ JoypadHandler::JoypadHandler()
     m_shmem_handler->shmemWrite(&m_joypad_data_neutral_values);
 }
 
-const JoypadDataTypes JoypadHandler::getJoypadData()
+const JoypadState JoypadHandler::getJoypadData()
 {
     return m_joypad_data;
 }

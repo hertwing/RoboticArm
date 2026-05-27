@@ -136,8 +136,8 @@ MainWindow::MainWindow(QWidget * parent):
     // Shmem readers and writers
     std::cout << "Creating SHMEM readers and writers" << std::endl;
     std::cout << "Creating control selection SHMEM fd." << std::endl;
-    m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>>(
-        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(OdinControlSelection), true);
+    m_control_selection_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<std::uint8_t>>(
+        odin::shmem_wrapper::DataTypes::CONTROL_SELECT_SHMEM_NAME, sizeof(std::uint8_t), true);
     std::cout << "Control selection SHMEM fd created." << std::endl;
     std::cout << "Creating GUI diagnostic data SHMEM fd." << std::endl;
     m_gui_diagnostic_shmem_handler = std::make_unique<odin::shmem_wrapper::ShmemHandler<DiagnosticData>>(
@@ -161,7 +161,7 @@ MainWindow::MainWindow(QWidget * parent):
     m_diagnostic_timer->start(300);
     connect(m_diagnostic_timer, SIGNAL(timeout()), this, SLOT(diagnosticTimerSlot()));
 
-    m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
+    m_control_selection = static_cast<std::uint8_t>(ControlSelection::NONE);
 
     m_motionThread = new QThread;
     m_motionWorker = new ScriptedMotionWorker;
@@ -299,11 +299,11 @@ void MainWindow::switchMode(UIMode m)
 
     switch (m)
     {
-        case UIMode::JOYPAD:     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::JOYPAD); break;
-        case UIMode::CAMERA:     m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::CAMERA); break;
-        case UIMode::DIAGNOSTIC: m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::DIAGNOSTIC); break;
-        case UIMode::AUTOMATIC:  m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::AUTOMATIC); break;
-        case UIMode::MAIN:       m_control_selection.control_selection = static_cast<std::uint8_t>(ControlSelection::NONE); break;
+        case UIMode::JOYPAD:     m_control_selection = static_cast<std::uint8_t>(ControlSelection::JOYPAD); break;
+        case UIMode::CAMERA:     m_control_selection = static_cast<std::uint8_t>(ControlSelection::CAMERA); break;
+        case UIMode::DIAGNOSTIC: m_control_selection = static_cast<std::uint8_t>(ControlSelection::DIAGNOSTIC); break;
+        case UIMode::AUTOMATIC:  m_control_selection = static_cast<std::uint8_t>(ControlSelection::AUTOMATIC); break;
+        case UIMode::MAIN:       m_control_selection = static_cast<std::uint8_t>(ControlSelection::NONE); break;
         default: break;
     }
     m_control_selection_shmem_handler->shmemWrite(&m_control_selection);

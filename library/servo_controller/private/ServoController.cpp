@@ -201,11 +201,7 @@ void ServoController::setAbsolutePosition(std::uint16_t target_pos, std::uint8_t
 
 void ServoController::moveLeft(uint8_t servo_num, uint8_t value)
 {
-    if (servo_num == 1)
-    {
-        setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 4), servo_num, calculatePosition(value, 4));
-    }
-    else if (servo_num == 0 || servo_num == 3)
+    if (servo_num == SERVO_BASE || servo_num == SERVO_ARM_2)
     {
         setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 10), servo_num, calculatePosition(value, 10));
     }
@@ -217,11 +213,7 @@ void ServoController::moveLeft(uint8_t servo_num, uint8_t value)
 
 void ServoController::moveRight(uint8_t servo_num, uint8_t value)
 {
-    if (servo_num == 1)
-    {
-        setAbsolutePosition(m_current_position[servo_num] + calculatePosition(value, 4), servo_num, calculatePosition(value, 4));
-    }
-    else if (servo_num == 0 || servo_num == 3)
+    if (servo_num == SERVO_BASE || servo_num == SERVO_ARM_2)
     {
         setAbsolutePosition(m_current_position[servo_num] - calculatePosition(value, 10), servo_num, calculatePosition(value, 10));
     }

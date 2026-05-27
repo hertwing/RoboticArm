@@ -340,13 +340,13 @@ private:
 
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_gui_diagnostic_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<DiagnosticData>> m_arm_diagnostic_shmem_handler;
-    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
+    std::unique_ptr<odin::shmem_wrapper::ShmemHandler<std::uint8_t>> m_control_selection_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<CameraPosData>> m_camera_pos_shmem_handler;
     std::unique_ptr<odin::shmem_wrapper::ShmemHandler<CameraPosReadyData>> m_camera_pos_ready_shmem_handler;
 
     DiagnosticData m_diagnostic_data;
 
-    OdinControlSelection m_control_selection;
+    std::uint8_t m_control_selection;
 
     OdinStepsIOHandler m_odin_steps_io_handler;
 

@@ -13,7 +13,7 @@ public:
 
     bool isJoypadConnected();
     void connectAndRun();
-    const JoypadDataTypes getJoypadData();
+    const JoypadState getJoypadData();
     // void setProcessStatus(const bool);
 
 public:
@@ -47,7 +47,7 @@ private:
     std::int16_t m_received_bytes;
     std::uint16_t m_connection_timeout_counter;
 
-    JoypadDataTypes m_joypad_data;
+    JoypadState m_joypad_data;
 
     JoypadData m_joypad_data_neutral_values;
 

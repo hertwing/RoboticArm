@@ -78,6 +78,15 @@ else()
     endif()
 endif()
 
+# Force host Qt tools for autogen when cross-compiling
+if(CMAKE_CROSSCOMPILING)
+  set_target_properties(odin_gui PROPERTIES
+    AUTOMOC_EXECUTABLE "/usr/lib/qt6/libexec/moc"
+    AUTOUIC_EXECUTABLE "/usr/lib/qt6/libexec/uic"
+    AUTORCC_EXECUTABLE "/usr/lib/qt6/libexec/rcc"
+  )
+endif()
+
 target_include_directories(${PROJECT_NAME}
         PRIVATE private
         PUBLIC public

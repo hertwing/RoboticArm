@@ -4,7 +4,7 @@
 #include "odin/shmem_wrapper/ShmemHandler.hpp"
 #include "DataTypes.h"
 
-#include <ws2811.h>
+#include <ws2811/ws2811.h>
 #include <cstdint>
 
 class LedHandler

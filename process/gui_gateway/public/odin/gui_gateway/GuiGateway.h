@@ -45,8 +45,8 @@ private:
     std::unique_ptr<TcpHandler<DiagnosticData>> m_diagnostic_comm_handler;
     std::unique_ptr<ShmemHandler<DiagnosticData>> m_diagnostic_shmem_handler;
 
-    std::unique_ptr<TcpHandler<OdinControlSelection>> m_control_selection_comm_handler;
-    std::unique_ptr<ShmemHandler<OdinControlSelection>> m_control_selection_shmem_handler;
+    std::unique_ptr<TcpHandler<std::uint8_t>> m_control_selection_comm_handler;
+    std::unique_ptr<ShmemHandler<std::uint8_t>> m_control_selection_shmem_handler;
 
     std::unique_ptr<TcpHandler<ScriptedMotionStepData>> m_scripted_motion_request_inet_handler;
     std::unique_ptr<ShmemHandler<ScriptedMotionStepData>> m_scripted_motion_request_shmem_status;
@@ -63,8 +63,8 @@ private:
     DiagnosticData m_remote_diagnostic;
     DiagnosticData m_previous_remote_diagnostic;
 
-    OdinControlSelection m_control_selection;
-    OdinControlSelection m_previous_control_selection;
+    std::uint8_t m_control_selection;
+    std::uint8_t m_previous_control_selection;
 
     std::thread m_diagnostic_thread;
     std::thread m_control_selection_thread;

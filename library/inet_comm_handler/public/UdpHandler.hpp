@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <time.h> 
 
+#include <array>
 #include <atomic>
 #include <cerrno>
 #include <chrono>

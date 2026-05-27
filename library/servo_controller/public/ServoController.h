@@ -21,8 +21,8 @@ static constexpr std::uint16_t MAX_CAM_TILT_POS_VAL = 2200;
 // static constexpr std::uint16_t MIN_CAM_PAN_POS_VAL = 500;
 // static constexpr std::uint16_t MAX_CAM_PAN_POS_VAL = 2500;
 
-static constexpr std::uint16_t SERVO_1_MIN_POS_VAL = 1400;
-static constexpr std::uint16_t SERVO_1_MAX_POS_VAL = 2200;
+static constexpr std::uint16_t SERVO_1_MIN_POS_VAL = 600;
+static constexpr std::uint16_t SERVO_1_MAX_POS_VAL = 2400;
 static constexpr std::uint16_t GRIPPER_MIN_POS_VAL = 780;
 static constexpr std::uint16_t GRIPPER_MAX_POS_VAL = 2300;
 
